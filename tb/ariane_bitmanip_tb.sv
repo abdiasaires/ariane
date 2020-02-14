@@ -80,9 +80,9 @@ module ariane_bitmanip_tb;
         repeat(8)
             #(CLOCK_PERIOD/2) clk_i = ~clk_i;
         rst_ni = 1'b1;
-        $display(" **************** Loading rom, 17:43. *******************");
-        $readmemh("/home/abdias/Ariane-Bitmanip/ariane-bitmanip/test-bitmanip/as/preloader.mem", `MAIN_MEM, 0, 1024);
-        $writememh("/home/abdias/Ariane-Bitmanip/ariane-bitmanip/test-bitmanip/as/preloader_w.mem", `MAIN_MEM, 0, 1024);
+        $display(" **************** Loading rom *******************");
+        $readmemh("../test-bitmanip/as/preloader.mem", `MAIN_MEM, 0, 1024);
+        $writememh("../test-bitmanip/as/preloader_w.mem", `MAIN_MEM, 0, 1024);
 
         forever begin
             #(CLOCK_PERIOD/2) clk_i = 1'b1;
