@@ -1,4 +1,4 @@
-# root path
+# root path 
 mkfile_path     := $(abspath $(lastword $(MAKEFILE_LIST)))
 root-dir        := $(dir $(mkfile_path))
 # Top level module to compile
