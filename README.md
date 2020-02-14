@@ -2,7 +2,7 @@
 
 ## Compiling a test code
 
-To generate a .mem file from the assembly test program:
+To generate a .mem file from an assembly test program:
 
 ```
 $ cd test-bitmanip/as
@@ -13,7 +13,8 @@ These commands create a preloader.mem file in $HOME/test-bitmanip/as. This file 
 
 ## Running the simulation
 
-Source the Cadence initialization script. (E.g. "cds".)
+Source the Cadence initialization script (e.g. "cds").
+
 In the base directory, do:
 
 ```
