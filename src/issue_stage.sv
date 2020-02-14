@@ -26,7 +26,7 @@ module issue_stage #(
     output logic                                     sb_full_o,
     input  logic                                     flush_unissued_instr_i,
     input  logic                                     flush_i,
-    // from ISSUE
+    // from ID
     input  scoreboard_entry_t                        decoded_instr_i,
     input  logic                                     decoded_instr_valid_i,
     input  logic                                     is_ctrl_flow_i,
@@ -52,6 +52,10 @@ module issue_stage #(
     output logic                                     fpu_valid_o,
     output logic [1:0]                               fpu_fmt_o,        // FP fmt field from instr.
     output logic [2:0]                               fpu_rm_o,         // FP rm field from instr.
+
+    // Bitmanip
+    input logic                                      bitmanip_ready_i,
+    output logic                                     bitmanip_valid_o,
 
     output logic                                     csr_valid_o,
 

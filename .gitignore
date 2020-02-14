@@ -31,3 +31,7 @@ stdout/
 work-dpi/
 tb/riscv-isa-sim/
 work-*/*
+*.mem
+*.dump
+*.hex
+*.vh

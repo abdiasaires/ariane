@@ -40,7 +40,6 @@ module load_store_unit #(
 
     input  logic                     commit_i,                 // commit the pending store
     output logic                     commit_ready_o,           // commit queue is ready to accept another commit request
-    input  logic [TRANS_ID_BITS-1:0] commit_tran_id_i,
 
     input  logic                     enable_translation_i,     // enable virtual memory translation
     input  logic                     en_ld_st_translation_i,   // enable virtual memory translation for load/stores
@@ -63,7 +62,6 @@ module load_store_unit #(
     // interface to dcache
     input  dcache_req_o_t [2:0]      dcache_req_ports_i,
     output dcache_req_i_t [2:0]      dcache_req_ports_o,
-    input  logic                     dcache_wbuffer_empty_i,
     // AMO interface
     output amo_req_t                 amo_req_o,
     input  amo_resp_t                amo_resp_i
@@ -142,7 +140,6 @@ module load_store_unit #(
         .icache_areq_o          ( icache_areq_o          ),
         .*
     );
-    logic store_buffer_empty;
     // ------------------
     // Store Unit
     // ------------------
@@ -151,7 +148,6 @@ module load_store_unit #(
         .rst_ni,
         .flush_i,
         .no_st_pending_o,
-        .store_buffer_empty_o  ( store_buffer_empty   ),
 
         .valid_i               ( st_valid_i           ),
         .lsu_ctrl_i            ( lsu_ctrl             ),
@@ -184,9 +180,7 @@ module load_store_unit #(
     // ------------------
     // Load Unit
     // ------------------
-    load_unit #(
-        .ArianeCfg ( ArianeCfg )
-    ) i_load_unit (
+    load_unit i_load_unit (
         .valid_i               ( ld_valid_i           ),
         .lsu_ctrl_i            ( lsu_ctrl             ),
         .pop_ld_o              ( pop_ld               ),
@@ -204,12 +198,9 @@ module load_store_unit #(
         // to store unit
         .page_offset_o         ( page_offset          ),
         .page_offset_matches_i ( page_offset_matches  ),
-        .store_buffer_empty_i  ( store_buffer_empty   ),
         // to memory arbiter
         .req_port_i            ( dcache_req_ports_i [1] ),
         .req_port_o            ( dcache_req_ports_o [1] ),
-        .dcache_wbuffer_empty_i,
-        .commit_tran_id_i,
         .*
     );
 

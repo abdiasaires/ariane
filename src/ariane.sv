@@ -114,6 +114,14 @@ module ariane #(
   logic [63:0]              fpu_result_ex_id;
   logic                     fpu_valid_ex_id;
   exception_t               fpu_exception_ex_id;
+
+  // Bitmanip
+  logic                     bitmanip_ready_ex_id;
+  logic [TRANS_ID_BITS-1:0] bitmanip_trans_id_ex_id;
+  logic                     bitmanip_valid_ex_id;
+  logic [63:0]              bitmanip_result_ex_id;
+  exception_t               bitmanip_exception_ex_id;
+
   // CSR
   logic                     csr_valid_id_ex;
   // --------------
@@ -125,7 +133,6 @@ module ariane #(
   // LSU Commit
   logic                     lsu_commit_commit_ex;
   logic                     lsu_commit_ready_ex_commit;
-  logic [TRANS_ID_BITS-1:0] lsu_commit_trans_id;
   logic                     no_st_pending_ex;
   logic                     no_st_pending_commit;
   logic                     amo_valid_commit;
@@ -311,14 +318,17 @@ module ariane #(
     .fpu_valid_o                ( fpu_valid_id_ex              ),
     .fpu_fmt_o                  ( fpu_fmt_id_ex                ),
     .fpu_rm_o                   ( fpu_rm_id_ex                 ),
+    // Bitmanip
+    .bitmanip_ready_i           ( bitmanip_ready_ex_id        ),
+    .bitmanip_valid_o           ( bitmanip_valid_id_ex        ),    
     // CSR
     .csr_valid_o                ( csr_valid_id_ex              ),
     // Commit
     .resolved_branch_i          ( resolved_branch              ),
-    .trans_id_i                 ( {flu_trans_id_ex_id,  load_trans_id_ex_id,  store_trans_id_ex_id,   fpu_trans_id_ex_id }),
-    .wbdata_i                   ( {flu_result_ex_id,    load_result_ex_id,    store_result_ex_id,       fpu_result_ex_id }),
-    .ex_ex_i                    ( {flu_exception_ex_id, load_exception_ex_id, store_exception_ex_id, fpu_exception_ex_id }),
-    .wt_valid_i                 ( {flu_valid_ex_id,     load_valid_ex_id,     store_valid_ex_id,         fpu_valid_ex_id }),
+    .trans_id_i                 ( {flu_trans_id_ex_id,  load_trans_id_ex_id,  store_trans_id_ex_id,   fpu_trans_id_ex_id,   bitmanip_trans_id_ex_id }),
+    .wbdata_i                   ( {flu_result_ex_id,    load_result_ex_id,    store_result_ex_id,       fpu_result_ex_id,   bitmanip_result_ex_id }),
+    .ex_ex_i                    ( {flu_exception_ex_id, load_exception_ex_id, store_exception_ex_id, fpu_exception_ex_id,   bitmanip_exception_ex_id }),
+    .wt_valid_i                 ( {flu_valid_ex_id,     load_valid_ex_id,     store_valid_ex_id,         fpu_valid_ex_id,   bitmanip_valid_ex_id }),
 
     .waddr_i                    ( waddr_commit_id              ),
     .wdata_i                    ( wdata_commit_id              ),
@@ -377,7 +387,6 @@ module ariane #(
 
     .lsu_commit_i           ( lsu_commit_commit_ex        ), // from commit
     .lsu_commit_ready_o     ( lsu_commit_ready_ex_commit  ), // to commit
-    .commit_tran_id_i       ( lsu_commit_trans_id         ), // from commit
     .no_st_pending_o        ( no_st_pending_ex            ),
     // FPU
     .fpu_ready_o            ( fpu_ready_ex_id             ),
@@ -393,6 +402,15 @@ module ariane #(
     .amo_valid_commit_i     ( amo_valid_commit            ),
     .amo_req_o              ( amo_req                     ),
     .amo_resp_i             ( amo_resp                    ),
+
+    // Bitmanip
+    .bitmanip_ready_o       ( bitmanip_ready_ex_id        ),
+    .bitmanip_valid_i       ( bitmanip_valid_id_ex        ),
+    .bitmanip_trans_id_o    ( bitmanip_trans_id_ex_id     ),
+    .bitmanip_valid_o       ( bitmanip_valid_ex_id        ),
+    .bitmanip_result_o      ( bitmanip_result_ex_id       ), 
+    .bitmanip_exception_o   ( bitmanip_exception_ex_id    ),
+
     // Performance counters
     .itlb_miss_o            ( itlb_miss_ex_perf           ),
     .dtlb_miss_o            ( dtlb_miss_ex_perf           ),
@@ -410,8 +428,7 @@ module ariane #(
     .icache_areq_o          ( icache_areq_ex_cache        ),
     // DCACHE interfaces
     .dcache_req_ports_i     ( dcache_req_ports_cache_ex   ),
-    .dcache_req_ports_o     ( dcache_req_ports_ex_cache   ),
-    .dcache_wbuffer_empty_i ( dcache_commit_wbuffer_empty )
+    .dcache_req_ports_o     ( dcache_req_ports_ex_cache   )
   );
 
   // ---------
@@ -439,7 +456,6 @@ module ariane #(
     .we_fpr_o               ( we_fpr_commit_id              ),
     .commit_lsu_o           ( lsu_commit_commit_ex          ),
     .commit_lsu_ready_i     ( lsu_commit_ready_ex_commit    ),
-    .commit_tran_id_o       ( lsu_commit_trans_id           ),
     .amo_valid_commit_o     ( amo_valid_commit              ),
     .amo_resp_i             ( amo_resp                      ),
     .commit_csr_o           ( csr_commit_commit_ex          ),

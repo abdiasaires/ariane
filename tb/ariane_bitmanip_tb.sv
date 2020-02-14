@@ -19,14 +19,10 @@ import uvm_pkg::*;
 
 `include "uvm_macros.svh"
 
-// `define MAIN_MEM(P) dut.i_sram.genblk1[0].i_ram.Mem_DP[(``P``)]
-`define MAIN_MEM(P) dut.i_sram.genmem[0].i_ram.Mem_DP[(``P``)]
+//`define MAIN_MEM(P) dut.i_sram.genmem[0].i_ram.Mem_DP[(``P``)]
+`define MAIN_MEM dut.i_sram.genmem[0].i_ram.Mem_DP
 
-import "DPI-C" function read_elf(input string filename);
-import "DPI-C" function byte get_section(output longint address, output longint len);
-import "DPI-C" context function byte read_section(input longint address, inout byte buffer[]);
-
-module ariane_tb;
+module ariane_bitmanip_tb;
 
     static uvm_cmdline_processor uvcl = uvm_cmdline_processor::get_inst();
 
@@ -84,6 +80,10 @@ module ariane_tb;
         repeat(8)
             #(CLOCK_PERIOD/2) clk_i = ~clk_i;
         rst_ni = 1'b1;
+        $display(" **************** Loading rom, 17:43. *******************");
+        $readmemh("/home/abdias/Ariane-Bitmanip/ariane-bitmanip/test-bitmanip/as/preloader.mem", `MAIN_MEM, 0, 1024);
+        $writememh("/home/abdias/Ariane-Bitmanip/ariane-bitmanip/test-bitmanip/as/preloader_w.mem", `MAIN_MEM, 0, 1024);
+
         forever begin
             #(CLOCK_PERIOD/2) clk_i = 1'b1;
             #(CLOCK_PERIOD/2) clk_i = 1'b0;
@@ -119,37 +119,10 @@ module ariane_tb;
     end
 
     // for faster simulation we can directly preload the ELF
-    // Note that we are loosing the capabilities to use risc-fesvr though
-    initial begin
-        automatic logic [7:0][7:0] mem_row;
-        longint address, len;
-        byte buffer[];
-        void'(uvcl.get_arg_value("+PRELOAD=", binary));
-
-        if (binary != "") begin
-            `uvm_info( "Core Test", $sformatf("Preloading ELF: %s", binary), UVM_LOW)
-
-            void'(read_elf(binary));
-            // wait with preloading, otherwise randomization will overwrite the existing value
-            wait(rst_ni);
-
-            // while there are more sections to process
-            while (get_section(address, len)) begin
-                automatic int num_words = (len+7)/8;
-                `uvm_info( "Core Test", $sformatf("Loading Address: %x, Length: %x", address, len),
-UVM_LOW)
-                buffer = new [num_words*8];
-                void'(read_section(address, buffer));
-                // preload memories
-                // 64-bit
-                for (int i = 0; i < num_words; i++) begin
-                    mem_row = '0;
-                    for (int j = 0; j < 8; j++) begin
-                        mem_row[j] = buffer[i*8 + j];
-                    end
-                    `MAIN_MEM((address[28:0] >> 3) + i) = mem_row;
-                end
-            end
-        end
+/*    initial begin
+        $display(" **************** Loading rom, 17:43. *******************");
+        $readmemh("/home/abdias/Ariane-Bitmanip/ariane-bitmanip/test-bitmanip/test.mem", `MAIN_MEM, 0, 1024);
+        $writememh("/home/abdias/Ariane-Bitmanip/ariane-bitmanip/test-bitmanip/test_write.mem", `MAIN_MEM, 0, 1024);
     end
+*/
 endmodule

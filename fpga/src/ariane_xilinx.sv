@@ -12,7 +12,7 @@
 // Author: Florian Zaruba <zarubaf@iis.ee.ethz.ch>
 
 module ariane_xilinx (
-`ifdef GENESYSII
+//`ifdef GENESYSII
   input  logic         sys_clk_p   ,
   input  logic         sys_clk_n   ,
   input  logic         cpu_resetn  ,
@@ -45,7 +45,7 @@ module ariane_xilinx (
   input  logic [ 7:0]  sw          ,
   output logic         fan_pwm     ,
   input  logic         trst_n      ,
-`elsif KC705
+/*`elsif KC705
   input  logic         sys_clk_p   ,
   input  logic         sys_clk_n   ,
 
@@ -137,7 +137,7 @@ module ariane_xilinx (
   input  wire [7:0]    pci_exp_rxp     ,
   input  wire [7:0]    pci_exp_rxn     ,
   input  logic         trst_n          ,
-`endif
+`endif */
   // SPI
   output logic        spi_mosi    ,
   input  logic        spi_miso    ,
@@ -269,7 +269,6 @@ axi_node_wrap_with_slices #(
         ariane_soc::CLINTBase,
         ariane_soc::PLICBase,
         ariane_soc::UARTBase,
-        ariane_soc::TimerBase,
         ariane_soc::SPIBase,
         ariane_soc::EthernetBase,
         ariane_soc::GPIOBase,
@@ -281,7 +280,6 @@ axi_node_wrap_with_slices #(
         ariane_soc::CLINTBase    + ariane_soc::CLINTLength - 1,
         ariane_soc::PLICBase     + ariane_soc::PLICLength - 1,
         ariane_soc::UARTBase     + ariane_soc::UARTLength - 1,
-        ariane_soc::TimerBase    + ariane_soc::TimerLength - 1,
         ariane_soc::SPIBase      + ariane_soc::SPILength - 1,
         ariane_soc::EthernetBase + ariane_soc::EthernetLength -1,
         ariane_soc::GPIOBase     + ariane_soc::GPIOLength - 1,
@@ -513,10 +511,10 @@ ariane_peripherals #(
     .AxiUserWidth ( AxiUserWidth     ),
     .InclUART     ( 1'b1             ),
     .InclGPIO     ( 1'b1             ),
-    `ifdef KINTEX7
+//    `ifdef KINTEX7
     .InclSPI      ( 1'b1         ),
     .InclEthernet ( 1'b1         )
-    `elsif KC705
+/*    `elsif KC705
     .InclSPI      ( 1'b1         ),
     .InclEthernet ( 1'b0         ) // Ethernet requires RAMB16 fpga/src/ariane-ethernet/dualmem_widen8.sv to be defined
     `elsif VC707
@@ -526,6 +524,7 @@ ariane_peripherals #(
     .InclSPI      ( 1'b0         ),
     .InclEthernet ( 1'b0         )
     `endif
+*/
 ) i_ariane_peripherals (
     .clk_i        ( clk                          ),
     .clk_200MHz_i ( ddr_clock_out                ),
@@ -536,7 +535,6 @@ ariane_peripherals #(
     .gpio         ( master[ariane_soc::GPIO]     ),
     .eth_clk_i    ( eth_clk                      ),
     .ethernet     ( master[ariane_soc::Ethernet] ),
-    .timer        ( master[ariane_soc::Timer]    ),
     .irq_o        ( irq                          ),
     .rx_i         ( rx                           ),
     .tx_o         ( tx                           ),

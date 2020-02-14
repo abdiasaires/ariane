@@ -59,6 +59,9 @@ module issue_read_operands #(
     output logic                                   fpu_valid_o,      // Output is valid
     output logic [1:0]                             fpu_fmt_o,        // FP fmt field from instr.
     output logic [2:0]                             fpu_rm_o,         // FP rm field from instr.
+    // Bitmanip
+    output logic                                   bitmanip_valid_o,
+    input  logic                                   bitmanip_ready_i,
     // CSR
     output logic                                   csr_valid_o,      // Output is valid
     // commit port
@@ -88,6 +91,7 @@ module issue_read_operands #(
     logic          lsu_valid_q;
     logic          csr_valid_q;
     logic       branch_valid_q;
+    logic     bitmanip_valid_q;
 
     logic [TRANS_ID_BITS-1:0] trans_id_n, trans_id_q;
     fu_op operator_n, operator_q; // operation to perform
@@ -115,6 +119,7 @@ module issue_read_operands #(
     assign fpu_valid_o         = fpu_valid_q;
     assign fpu_fmt_o           = fpu_fmt_q;
     assign fpu_rm_o            = fpu_rm_q;
+    assign bitmanip_valid_o    = bitmanip_valid_q;
     // ---------------
     // Issue Stage
     // ---------------
@@ -131,6 +136,8 @@ module issue_read_operands #(
                 fu_busy = ~fpu_ready_i;
             LOAD, STORE:
                 fu_busy = ~lsu_ready_i;
+            BITMANIP:
+                fu_busy = ~bitmanip_ready_i;
             default:
                 fu_busy = 1'b0;
         endcase
@@ -233,23 +240,26 @@ module issue_read_operands #(
     // This needs to be like this to make verilator happy. I know its ugly.
     always_ff @(posedge clk_i or negedge rst_ni) begin
       if (!rst_ni) begin
-        alu_valid_q    <= 1'b0;
-        lsu_valid_q    <= 1'b0;
-        mult_valid_q   <= 1'b0;
-        fpu_valid_q    <= 1'b0;
-        fpu_fmt_q      <= 2'b0;
-        fpu_rm_q       <= 3'b0;
-        csr_valid_q    <= 1'b0;
-        branch_valid_q <= 1'b0;
+        alu_valid_q      <= 1'b0;
+        lsu_valid_q      <= 1'b0;
+        mult_valid_q     <= 1'b0;
+        fpu_valid_q      <= 1'b0;
+        fpu_fmt_q        <= 2'b0;
+        fpu_rm_q         <= 3'b0;
+        csr_valid_q      <= 1'b0;
+        branch_valid_q   <= 1'b0;
+        bitmanip_valid_q <= 1'b0;
       end else begin
-        alu_valid_q    <= 1'b0;
-        lsu_valid_q    <= 1'b0;
-        mult_valid_q   <= 1'b0;
-        fpu_valid_q    <= 1'b0;
-        fpu_fmt_q      <= 2'b0;
-        fpu_rm_q       <= 3'b0;
-        csr_valid_q    <= 1'b0;
-        branch_valid_q <= 1'b0;
+        alu_valid_q      <= 1'b0;
+        lsu_valid_q      <= 1'b0;
+        mult_valid_q     <= 1'b0;
+        fpu_valid_q      <= 1'b0;
+        fpu_fmt_q        <= 2'b0;
+        fpu_rm_q         <= 3'b0;
+        csr_valid_q      <= 1'b0;
+        branch_valid_q   <= 1'b0;
+        bitmanip_valid_q <= 1'b0;
+
         // Exception pass through:
         // If an exception has occurred simply pass it through
         // we do not want to issue this instruction
@@ -275,6 +285,9 @@ module issue_read_operands #(
                     lsu_valid_q    <= 1'b1;
                 CSR:
                     csr_valid_q    <= 1'b1;
+                BITMANIP:
+                    bitmanip_valid_q <= 1'b1;
+
                 default:;
             endcase
         end
@@ -287,6 +300,7 @@ module issue_read_operands #(
             fpu_valid_q    <= 1'b0;
             csr_valid_q    <= 1'b0;
             branch_valid_q <= 1'b0;
+            bitmanip_valid_q <= 1'b0;
         end
       end
     end

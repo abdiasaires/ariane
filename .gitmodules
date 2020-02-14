@@ -49,3 +49,6 @@
 [submodule "fpga/src/apb_timer"]
 	path = fpga/src/apb_timer
 	url = https://github.com/pulp-platform/apb_timer.git
+[submodule "src/bitmanip"]
+	path = src/bitmanip
+	url = https://github.com/riscv/riscv-bitmanip.git

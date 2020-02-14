@@ -52,7 +52,7 @@ end
 
 genvar k;
 generate
-    for (k = 0; k<(DATA_WIDTH+63)/64; k++) begin
+    for (k = 0; k<(DATA_WIDTH+63)/64; k++) begin : genmem
         // unused byte-enable segments (8bits) are culled by the tool
         SyncSpRamBeNx64 #(
           .ADDR_WIDTH($clog2(NUM_WORDS)),

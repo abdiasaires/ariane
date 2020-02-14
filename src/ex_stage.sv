@@ -62,7 +62,6 @@ module ex_stage #(
 
     input  logic                                   lsu_commit_i,
     output logic                                   lsu_commit_ready_o, // commit queue is ready to accept another commit request
-    input  logic [TRANS_ID_BITS-1:0]               commit_tran_id_i,
     output logic                                   no_st_pending_o,
     input  logic                                   amo_valid_commit_i,
     // FPU
@@ -76,6 +75,15 @@ module ex_stage #(
     output logic [63:0]                            fpu_result_o,
     output logic                                   fpu_valid_o,
     output exception_t                             fpu_exception_o,
+	    
+	// Bitmanip
+	output logic 								   bitmanip_ready_o,
+    input  logic                                   bitmanip_valid_i,
+	output logic [TRANS_ID_BITS-1:0]			   bitmanip_trans_id_o,
+	output logic								   bitmanip_valid_o, 
+	output logic [63:0]							   bitmanip_result_o, 
+    output exception_t                             bitmanip_exception_o,
+
     // Memory Management
     input  logic                                   enable_translation_i,
     input  logic                                   en_ld_st_translation_i,
@@ -94,7 +102,6 @@ module ex_stage #(
     // interface to dcache
     input  dcache_req_o_t [2:0]                    dcache_req_ports_i,
     output dcache_req_i_t [2:0]                    dcache_req_ports_o,
-    input  logic                                   dcache_wbuffer_empty_i,
     output amo_req_t                               amo_req_o,          // request to cache subsytem
     input  amo_resp_t                              amo_resp_i,         // response from cache subsystem
     // Performance counters
@@ -277,7 +284,6 @@ module ex_stage #(
         .store_exception_o,
         .commit_i              ( lsu_commit_i       ),
         .commit_ready_o        ( lsu_commit_ready_o ),
-        .commit_tran_id_i,
         .enable_translation_i,
         .en_ld_st_translation_i,
         .icache_areq_i,
@@ -293,10 +299,27 @@ module ex_stage #(
         .dtlb_miss_o,
         .dcache_req_ports_i,
         .dcache_req_ports_o,
-        .dcache_wbuffer_empty_i,
         .amo_valid_commit_i,
         .amo_req_o,
         .amo_resp_i
     );
+
+    // ----------------
+    // Bit-manipulation Unit
+    // ----------------
+
+    bitmanip_unit bitmanip_unit_i (
+	.clk_i,          	
+	.rst_ni,          	
+	.flush_i,
+	.fu_data_i,	
+	.bitmanip_ready_o,
+    .bitmanip_valid_i,
+	.bitmanip_trans_id_o,
+	.bitmanip_valid_o, 
+	.bitmanip_result_o,
+	.bitmanip_exception_o 
+    );
+
 
 endmodule

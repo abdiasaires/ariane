@@ -551,10 +551,30 @@ module decoder (
                         3'b111: instruction_o.op = ariane_pkg::ANDL;  // And with Immediate
 
                         3'b001: begin
-                          instruction_o.op = ariane_pkg::SLL;  // Shift Left Logical by Immediate
-                          if (instr.instr[31:26] != 6'b0)
-                            illegal_instr = 1'b1;
-                        end
+                          if (instr.instr[31:26] == 6'b0)
+                            instruction_o.op = ariane_pkg::SLL;  // Shift Left Logical by Immediate
+                          
+                          // Beginning of bitmanip instructions
+                          else if(instr.instr[31:25] == 7'b011_0000)
+                              begin
+                                  instruction_o.fu  = BITMANIP;
+                                  imm_select        = NOIMM;
+
+                                  unique case ({instr.rtype.rs2, instr.rtype.funct3})  
+                                      {4'b0000, 3'b001}: instruction_o.op = ariane_pkg::BM_CLZ;      // clz
+                                      {4'b0001, 3'b001}: instruction_o.op = ariane_pkg::BM_CTZ;      // ctz
+                                      {4'b0010, 3'b001}: instruction_o.op = ariane_pkg::BM_PCNT;     // pcnt
+                                      {4'b0011, 3'b001}: instruction_o.op = ariane_pkg::BM_BMATFLIP; // bmatflip
+                                      {4'b0100, 3'b001}: instruction_o.op = ariane_pkg::BM_SEXTB;    // sext.b
+                                      {4'b0101, 3'b001}: instruction_o.op = ariane_pkg::BM_SEXTH;    // sext.h
+                                      default: illegal_instr = 1'b1;    
+                                  endcase
+                              end
+                          // End of bitmanip instructions
+
+                          else
+                              illegal_instr = 1'b1;    
+                          end
 
                         3'b101: begin
                             if (instr.instr[31:26] == 6'b0)
@@ -998,6 +1018,22 @@ module decoder (
                 end
 
                 default: illegal_instr = 1'b1;
+/*
+
+                // --------------------------------
+                // Bit-manipulation Instructions
+                // --------------------------------
+                ariane_bitmanip_pkg::OpcodeBitmanip: begin
+                    instruction_o.fu  = BITMANIP;
+                    instruction_o.rs1[4:0] = instr.rtype.rs1;
+                    instruction_o.rd[4:0]  = instr.rtype.rd;
+
+                    unique case ({instr.rtype.funct7, instr.rtype.rs2, instr.rtype.funct3})
+                        {7'b011_0000, 4'b0001, 3'b000}: instruction_o.op = ariane_pkg::BM_CTZ; // ctz
+                        default: illegal_instr = 1'b1;
+                    endcase
+                end
+*/
             endcase
         end
     end

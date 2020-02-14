@@ -97,7 +97,8 @@ module ariane_testharness #(
   assign init_done = rst_ni;
 
   initial begin
-    if (!$value$plusargs("jtag_rbb_enable=%b", jtag_enable)) jtag_enable = 'h0;
+ //   if (!$value$plusargs("jtag_rbb_enable=%b", jtag_enable)) jtag_enable = 'h0;
+      jtag_enable = 'h0;
   end
 
   // debug if MUX
@@ -110,7 +111,7 @@ module ariane_testharness #(
 
   // SiFive's SimJTAG Module
   // Converts to DPI calls
-  SimJTAG i_SimJTAG (
+  /*SimJTAG i_SimJTAG (
     .clock                ( clk_i                ),
     .reset                ( ~rst_ni              ),
     .enable               ( jtag_enable[0]       ),
@@ -123,8 +124,9 @@ module ariane_testharness #(
     .jtag_TDO_driven      ( jtag_TDO_driven      ),
     .exit                 ( jtag_exit            )
   );
+ */
 
-  dmi_jtag i_dmi_jtag (
+  /*dmi_jtag i_dmi_jtag (
     .clk_i            ( clk_i           ),
     .rst_ni           ( rst_ni          ),
     .testmode_i       ( test_en         ),
@@ -141,7 +143,7 @@ module ariane_testharness #(
     .td_i             ( jtag_TDI        ),
     .td_o             ( jtag_TDO_data   ),
     .tdo_oe_o         ( jtag_TDO_driven )
-  );
+  );*/
 
   // SiFive's SimDTM Module
   // Converts to DPI calls
@@ -149,7 +151,7 @@ module ariane_testharness #(
   assign dmi_req.op = dm::dtm_op_e'(debug_req_bits_op);
 
   if (InclSimDTM) begin
-    SimDTM i_SimDTM (
+/*    SimDTM i_SimDTM (
       .clk                  ( clk_i                 ),
       .reset                ( ~rst_ni               ),
       .debug_req_valid      ( dmi_req_valid         ),
@@ -163,7 +165,8 @@ module ariane_testharness #(
       .debug_resp_bits_data ( debug_resp.data       ),
       .exit                 ( dmi_exit              )
     );
-  end else begin
+*/
+ end else begin
     assign dmi_req_valid = '0;
     assign debug_req_bits_op = '0;
     assign dmi_exit = 1'b0;
@@ -551,7 +554,6 @@ module ariane_testharness #(
       ariane_soc::CLINTBase,
       ariane_soc::PLICBase,
       ariane_soc::UARTBase,
-      ariane_soc::TimerBase,
       ariane_soc::SPIBase,
       ariane_soc::EthernetBase,
       ariane_soc::GPIOBase,
@@ -563,7 +565,6 @@ module ariane_testharness #(
       ariane_soc::CLINTBase    + ariane_soc::CLINTLength - 1,
       ariane_soc::PLICBase     + ariane_soc::PLICLength - 1,
       ariane_soc::UARTBase     + ariane_soc::UARTLength - 1,
-      ariane_soc::TimerBase    + ariane_soc::TimerLength - 1,
       ariane_soc::SPIBase      + ariane_soc::SPILength - 1,
       ariane_soc::EthernetBase + ariane_soc::EthernetLength -1,
       ariane_soc::GPIOBase     + ariane_soc::GPIOLength - 1,
@@ -632,7 +633,6 @@ module ariane_testharness #(
     .uart      ( master[ariane_soc::UART]     ),
     .spi       ( master[ariane_soc::SPI]      ),
     .ethernet  ( master[ariane_soc::Ethernet] ),
-    .timer     ( master[ariane_soc::Timer]    ),
     .irq_o     ( irqs                         ),
     .rx_i      ( rx                           ),
     .tx_o      ( tx                           ),
