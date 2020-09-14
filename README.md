@@ -9,11 +9,11 @@ $ cd test-bitmanip/as
 $ make testname=example
 ```
 
-These commands create a preloader.mem file in $HOME/test-bitmanip/as. This file will be loaded to memory at the beginning of the simulation.
+These commands create a preloader.mem file in $HOME/test-bitmanip/as. It will be loaded to memory at the beginning of simulation.
 
 ## Running the simulation
 
-Source the Cadence initialization script (e.g. "cds").
+Source the Cadence initialization script (e.g., "cds").
 
 In the base directory, do:
 
