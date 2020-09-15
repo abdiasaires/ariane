@@ -17,7 +17,7 @@ ifeq ($(gui), 1)
 	guicmd := -gui
 endif
 
-# Sources
+# Sources  
 # Package files -> compile first
 ariane_pkg := include/riscv_pkg.sv                          \
               src/riscv-dbg/src/dm_pkg.sv                   \
