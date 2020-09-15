@@ -1,4 +1,4 @@
-# Full bitmanip extension
+# Full bitmanip extension - test2
 # root path 
 mkfile_path     := $(abspath $(lastword $(MAKEFILE_LIST)))
 root-dir        := $(dir $(mkfile_path))
