@@ -1,7 +1,12 @@
-# Full bitmanip extension - test2
+# Full bitmanip extension
+
 # root path 
 mkfile_path     := $(abspath $(lastword $(MAKEFILE_LIST)))
 root-dir        := $(dir $(mkfile_path))
+# questa library
+library        ?= work
+# verilator lib
+ver-library    ?= work-ver
 # Top level module to compile
 top_level      ?= ariane_tb
 # library for DPI
@@ -38,7 +43,7 @@ ariane_pkg := include/riscv_pkg.sv                          \
               
 
 ariane_pkg := $(addprefix $(root-dir), $(ariane_pkg))
-ariane_pkg += /home/abdias/Ariane-Bitmanip/uvm-1.1b/src/uvm_pkg.sv
+ariane_pkg += ../uvm-1.1b/src/uvm_pkg.sv
 
 
 
@@ -158,21 +163,343 @@ fpga_src := $(addprefix $(root-dir), $(fpga_src))
 # look for testbenches
 tbs := tb/ariane_bitmanip_tb.sv tb/ariane_testharness.sv
 
+# Questa flags
+compile_flag     += +cover=bcfst+/dut -incr -64 -nologo -quiet -suppress 13262 -permissive +define+$(defines)
+uvm-flags        += +UVM_NO_RELNOTES +UVM_VERBOSITY=LOW
+questa-flags     += -t 1ns -64 -coverage -classdebug $(gui-sim) $(QUESTASIM_FLAGS)
+compile_flag_vhd += -64 -nologo -quiet -2008          
+
 # Search here for include files (e.g.: non-standalone components)
 # deleted: /home/abdias/Ariane-Bitmanip/uvm-1.1b/src src/common_cells/include/ \
 #          /home/abdias/Ariane-Bitmanip/uvm-1.1b/src/dpi 
 
-incdir := src/common_cells/include/ src/util include
+incdir := ../uvm-1.1b/src/ src/common_cells/include/ src/util include
+# incdir :=            
           
 # Iterate over all include directories and write them with -incdir prefixed
 # +incdir+ works for Verilator and QuestaSim
-list_incdir := $(foreach dir, ${incdir}, -incdir $(dir))
+list_incdir := $(foreach dir, ${incdir}, +incdir+$(dir))
+# list_incdir :=  
+# inc_uvm := +incdir+../uvm-1.1b/src/
 
 # DPI
 dpi_list := $(patsubst tb/dpi/%.cc, ${dpi-library}/%.o, $(wildcard tb/dpi/*.cc))
 dpi = $(dpi_list)
 
 # Build the TB and module using QuestaSim
-build:  
-	xrun $(ariane_pkg) $(tbs) $(src) $(uart_src) $(util) $(list_incdir) -V93 -disable_sem2009 -uvm -UVMNOAUTOCOMPILE -access rwc -input $(tcl-run) $(guicmd) 
+build: $(library) $(library)/.build-srcs $(library)/.build-tb $(dpi-library)/ariane_dpi.so
+	# Optimize top level
+	$(info ************  IN BUILD ************)
+	vopt$(questa_version) $(compile_flag) -work $(library)  $(top_level) -o $(top_level)_optimized +acc -check_synthesis
+
+# src files
+$(library)/.build-srcs: $(util) $(library)
+	$(info ************  IN BUILD SRCS ************)
+	vlog$(questa_version) $(compile_flag) -work $(library) $(filter %.sv,$(ariane_pkg)) $(inc_uvm) $(list_incdir) -suppress 2583
+	# vcom$(questa_version) $(compile_flag_vhd) -work $(library) -pedanticerrors $(filter %.vhd,$(ariane_pkg))
+	# vlog$(questa_version) $(compile_flag) -work $(library) $(filter %.sv,$(util)) $(list_incdir) -suppress 2583
+	vlog$(questa_version) $(compile_flag) -work $(library) $(filter %.sv,$(util)) $(list_incdir) -suppress 2583
+	# Suppress message that always_latch may not be checked thoroughly by QuestaSim.
+	vcom$(questa_version) $(compile_flag_vhd) -work $(library) -pedanticerrors $(filter %.vhd,$(uart_src))
+	# vcom$(questa_version) $(compile_flag_vhd) -work $(library) -pedanticerrors $(filter %.vhd,$(src))
+	vlog$(questa_version) $(compile_flag) -work $(library) -pedanticerrors $(filter %.sv,$(src)) $(list_incdir) -suppress 2583
+	touch $(library)/.build-srcs
+
+# build TBs
+$(library)/.build-tb: $(dpi)
+	# Compile top level
+	$(info ************  IN BUILD TB ************)
+	vlog$(questa_version) $(compile_flag) -sv $(tbs) -work $(library)
+	touch $(library)/.build-tb
+
+$(library):
+	vlib${questa_version} $(library)
+
+# compile DPIs
+$(dpi-library)/%.o: tb/dpi/%.cc $(dpi_hdr)
+	mkdir -p $(dpi-library)
+	$(CXX) -shared -fPIC -std=c++0x -Bsymbolic $(CFLAGS) -c $< -o $@
+
+$(dpi-library)/ariane_dpi.so: $(dpi)
+	$(info ************  IN ARIANE DPI ************)
+	mkdir -p $(dpi-library)
+	# Compile C-code and generate .so file
+	$(CXX) -shared -m64 -o $(dpi-library)/ariane_dpi.so $? -L$(RISCV)/lib -Wl,-rpath,$(RISCV)/lib -lfesvr
+
+# single test runs on Questa can be started by calling make <testname>, e.g. make towers.riscv
+# the test names are defined in ci/riscv-asm-tests.list, and in ci/riscv-benchmarks.list
+# if you want to run in batch mode, use make <testname> batch-mode=1
+# alternatively you can call make sim elf-bin=<path/to/elf-bin> in order to load an arbitrary binary
+sim: build
+	vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +MAX_CYCLES=$(max_cycles) +UVM_TESTNAME=$(test_case) \
+	+BASEDIR=$(riscv-test-dir) $(uvm-flags) $(QUESTASIM_FLAGS) -gblso $(RISCV)/lib/libfesvr.so -sv_lib $(dpi-library)/ariane_dpi  \
+	${top_level}_optimized +permissive-off ++$(elf-bin) ++$(target-options) | tee sim.log
+
+$(riscv-asm-tests): build
+	vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +max-cycles=$(max_cycles) +UVM_TESTNAME=$(test_case) \
+	+BASEDIR=$(riscv-test-dir) $(uvm-flags) +jtag_rbb_enable=0  -gblso $(RISCV)/lib/libfesvr.so -sv_lib $(dpi-library)/ariane_dpi        \
+	${top_level}_optimized $(QUESTASIM_FLAGS) +permissive-off ++$(riscv-test-dir)/$@ ++$(target-options) | tee tmp/riscv-asm-tests-$@.log
+
+$(riscv-amo-tests): build
+	vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +max-cycles=$(max_cycles) +UVM_TESTNAME=$(test_case) \
+	+BASEDIR=$(riscv-test-dir) $(uvm-flags) +jtag_rbb_enable=0  -gblso $(RISCV)/lib/libfesvr.so -sv_lib $(dpi-library)/ariane_dpi        \
+	${top_level}_optimized $(QUESTASIM_FLAGS) +permissive-off ++$(riscv-test-dir)/$@ ++$(target-options) | tee tmp/riscv-amo-tests-$@.log
+
+$(riscv-mul-tests): build
+	vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +max-cycles=$(max_cycles) +UVM_TESTNAME=$(test_case) \
+	+BASEDIR=$(riscv-test-dir) $(uvm-flags) +jtag_rbb_enable=0  -gblso $(RISCV)/lib/libfesvr.so -sv_lib $(dpi-library)/ariane_dpi        \
+	${top_level}_optimized $(QUESTASIM_FLAGS) +permissive-off ++$(riscv-test-dir)/$@ ++$(target-options) | tee tmp/riscv-mul-tests-$@.log
+
+$(riscv-fp-tests): build
+	vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +max-cycles=$(max_cycles) +UVM_TESTNAME=$(test_case) \
+	+BASEDIR=$(riscv-test-dir) $(uvm-flags) +jtag_rbb_enable=0  -gblso $(RISCV)/lib/libfesvr.so -sv_lib $(dpi-library)/ariane_dpi        \
+	${top_level}_optimized $(QUESTASIM_FLAGS) +permissive-off ++$(riscv-test-dir)/$@ ++$(target-options) | tee tmp/riscv-fp-tests-$@.log
+
+$(riscv-benchmarks): build
+	vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +max-cycles=$(max_cycles) +UVM_TESTNAME=$(test_case) \
+	+BASEDIR=$(riscv-benchmarks-dir) $(uvm-flags) +jtag_rbb_enable=0 -gblso $(RISCV)/lib/libfesvr.so -sv_lib $(dpi-library)/ariane_dpi   \
+	${top_level}_optimized $(QUESTASIM_FLAGS) +permissive-off ++$(riscv-benchmarks-dir)/$@ ++$(target-options) | tee tmp/riscv-benchmarks-$@.log
+
+# can use -jX to run ci tests in parallel using X processes
+run-asm-tests: $(riscv-asm-tests)
+	$(MAKE) check-asm-tests
+
+run-amo-tests: $(riscv-amo-tests)
+	$(MAKE) check-amo-tests
+
+run-mul-tests: $(riscv-mul-tests)
+	$(MAKE) check-mul-tests
+
+run-fp-tests: $(riscv-fp-tests)
+	$(MAKE) check-fp-tests
+
+check-asm-tests:
+	ci/check-tests.sh tmp/riscv-asm-tests- $(shell wc -l $(riscv-asm-tests-list) | awk -F " " '{ print $1 }')
+
+check-amo-tests:
+	ci/check-tests.sh tmp/riscv-amo-tests- $(shell wc -l $(riscv-amo-tests-list) | awk -F " " '{ print $1 }')
+
+check-mul-tests:
+	ci/check-tests.sh tmp/riscv-mul-tests- $(shell wc -l $(riscv-mul-tests-list) | awk -F " " '{ print $1 }')
+
+check-fp-tests:
+	ci/check-tests.sh tmp/riscv-fp-tests- $(shell wc -l $(riscv-fp-tests-list) | awk -F " " '{ print $1 }')
+
+# can use -jX to run ci tests in parallel using X processes
+run-benchmarks: $(riscv-benchmarks)
+	$(MAKE) check-benchmarks
+
+check-benchmarks:
+	ci/check-tests.sh tmp/riscv-benchmarks- $(shell wc -l $(riscv-benchmarks-list) | awk -F " " '{ print $1 }')
+
+# verilator-specific
+verilate_command := $(verilator)                                                                                 \
+                    $(filter-out %.vhd, $(ariane_pkg))                                                           \
+                    $(filter-out src/fpu_wrap.sv, $(filter-out %.vhd, $(src)))                                   \
+                    +define+$(defines)                                                                           \
+                    src/util/sram.sv                                                                             \
+                    tb/common/mock_uart.sv                                                                       \
+                    +incdir+src/axi_node                                                                         \
+                    $(if $(verilator_threads), --threads $(verilator_threads))                                   \
+                    --unroll-count 256                                                                           \
+                    -Werror-PINMISSING                                                                           \
+                    -Werror-IMPLICIT                                                                             \
+                    -Wno-fatal                                                                                   \
+                    -Wno-PINCONNECTEMPTY                                                                         \
+                    -Wno-ASSIGNDLY                                                                               \
+                    -Wno-DECLFILENAME                                                                            \
+                    -Wno-UNUSED                                                                                  \
+                    -Wno-UNOPTFLAT                                                                               \
+                    -Wno-BLKANDNBLK                                                                              \
+                    -Wno-style                                                                                   \
+                    $(if $(DROMAJO), -DDROMAJO=1,)                                                               \
+                    $(if $(PROFILE),--stats --stats-vars --profile-cfuncs,)                                      \
+                    $(if $(DEBUG),--trace --trace-structs,)                                                      \
+                    -LDFLAGS "-L$(RISCV)/lib -Wl,-rpath,$(RISCV)/lib -lfesvr$(if $(PROFILE), -g -pg,) $(if $(DROMAJO), -L../tb/dromajo/src -ldromajo_cosim,) -lpthread" \
+                    -CFLAGS "$(CFLAGS)$(if $(PROFILE), -g -pg,) $(if $(DROMAJO), -DDROMAJO=1,)" -Wall --cc  --vpi \
+                    $(list_incdir) --top-module ariane_testharness                                               \
+                    --Mdir $(ver-library) -O3                                                                    \
+                    --exe tb/ariane_tb.cpp tb/dpi/SimDTM.cc tb/dpi/SimJTAG.cc                                    \
+					tb/dpi/remote_bitbang.cc tb/dpi/msim_helper.cc $(if $(DROMAJO), tb/dpi/dromajo_cosim_dpi.cc,)
+
+dromajo:
+	cd ./tb/dromajo/src && make
+
+run-dromajo-verilator:
+	$(if $(BIN), $(MAKE) checkpoint_dromajo, $(error "Please provide absolute path to the binary. Usage: make run_dromajo BIN=/absolute/path/to/binary"))
+
+checkpoint_dromajo:
+	cd ./tb/dromajo/run/checkpoints/ && \
+	rm -rf $(notdir $(BIN)) && mkdir $(notdir $(BIN)) && cd $(notdir $(BIN)) && \
+  cp $(BIN) . && \
+	echo -e "\
+	{\n\
+    \"version\":1,\n\
+    \"machine\":\"riscv64\",\n\
+    \"memory_size\":256,\n\
+    \"bios\":\"$(shell pwd)/tb/dromajo/run/checkpoints/$(notdir $(BIN))/$(notdir $(BIN))\",\n\
+    \"memory_base_addr\":0x80000000,\n\
+    \"missing_csrs\": [0x323, 0x324, 0x325, 0x326, //mhpmevent csrs\n\
+                     0x327, 0x328, 0x329, 0x32a,\n\
+                     0x32b, 0x32c, 0x32d, 0x32e,\n\
+                     0x32f, 0x330, 0x331, 0x332,\n\
+                     0x333, 0x334, 0x335, 0x336,\n\
+                     0x337, 0x338, 0x339, 0x33a,\n\
+                     0x33b, 0x33c, 0x33d, 0x33e,\n\
+                     0x33f,\n\
+                     0x3a0, 0x3a1, 0x3a2, 0x3a3, //pmp csrs\n\
+                     0x3b0, 0x3b1, 0x3b2, 0x3b3,\n\
+                     0x3b4, 0x3b5, 0x3b6, 0x3b7,\n\
+                     0x3b8, 0x3b9, 0x3ba, 0x3bb,\n\
+                     0x3bc, 0x3bd, 0x3be, 0x3bf,\n\
+                     0x320], //mcountinhibit\n\
+    \"maxinsns\": 100,\n\
+		\"clint_base_addr\": 0x02000000,\n\
+	  \"clint_size\": 0xC0000,\n\
+	  \"plic_base_addr\": 0x0C000000,\n\
+	  \"plic_size\": 0x3FFFFFF,\n\
+	  \"uart_base_addr\": 0x10000000,\n\
+	  \"uart_size\": 0x1000\n\
+  }" > "$(notdir $(BIN))_boot.cfg" && \
+	echo -e "\
+	{\n\
+    \"version\":1,\n\
+    \"machine\":\"riscv64\",\n\
+    \"memory_size\":256,\n\
+    \"bios\":\"$(shell pwd)/tb/dromajo/run/checkpoints/$(notdir $(BIN))/$(notdir $(BIN))\",\n\
+    \"load\":\"$(shell pwd)/tb/dromajo/run/checkpoints/$(notdir $(BIN))/$(notdir $(BIN))\",\n\
+    \"skip_commit\": [0x73, 0x9002, 0x100073],\n\
+    \"memory_base_addr\":0x80000000,\n\
+		\"clint_base_addr\": 0x02000000,\n\
+	  \"clint_size\": 0xC0000,\n\
+	  \"plic_base_addr\": 0x0C000000,\n\
+	  \"plic_size\": 0x3FFFFFF,\n\
+	  \"uart_base_addr\": 0x10000000,\n\
+	  \"uart_size\": 0x1000\n\
+  }" > "$(notdir $(BIN)).cfg" && \
+  ../../../src/dromajo --save=$(notdir $(BIN)) --save_format=1 ./$(notdir $(BIN))_boot.cfg && \
+  cd ../../../../../ && \
+	./work-ver/Variane_testharness +checkpoint=$(shell pwd)/tb/dromajo/run/checkpoints/$(notdir $(BIN))/$(notdir $(BIN))
+
+
+# User Verilator, at some point in the future this will be auto-generated
+verilate: $(if $(DROMAJO), dromajo,)
+	@echo "[Verilator] Building Model$(if $(PROFILE), for Profiling,)"
+	$(verilate_command)
+	cd $(ver-library) && $(MAKE) -j${NUM_JOBS} -f Variane_testharness.mk
+
+sim-verilator: verilate
+	$(ver-library)/Variane_testharness $(elf-bin)
+
+$(addsuffix -verilator,$(riscv-asm-tests)): verilate
+	$(ver-library)/Variane_testharness $(riscv-test-dir)/$(subst -verilator,,$@)
+
+$(addsuffix -verilator,$(riscv-amo-tests)): verilate
+	$(ver-library)/Variane_testharness $(riscv-test-dir)/$(subst -verilator,,$@)
+
+$(addsuffix -verilator,$(riscv-mul-tests)): verilate
+	$(ver-library)/Variane_testharness $(riscv-test-dir)/$(subst -verilator,,$@)
+
+$(addsuffix -verilator,$(riscv-fp-tests)): verilate
+	$(ver-library)/Variane_testharness $(riscv-test-dir)/$(subst -verilator,,$@)
+
+$(addsuffix -verilator,$(riscv-benchmarks)): verilate
+	$(ver-library)/Variane_testharness $(riscv-benchmarks-dir)/$(subst -verilator,,$@)
+
+run-all-tests-verilator: $(addsuffix -verilator, $(riscv-asm-tests)) $(addsuffix -verilator, $(riscv-amo-tests)) $(addsuffix -verilator, $(run-mul-verilator)) $(addsuffix -verilator, $(riscv-fp-tests))
+
+run-asm-tests-verilator: $(addsuffix -verilator, $(riscv-asm-tests))
+
+run-amo-verilator: $(addsuffix -verilator, $(riscv-amo-tests))
+
+run-mul-verilator: $(addsuffix -verilator, $(riscv-mul-tests))
+
+run-fp-verilator: $(addsuffix -verilator, $(riscv-fp-tests))
+
+run-fp-d-verilator: $(addsuffix -verilator, $(filter rv64ud%, $(riscv-fp-tests)))
+
+run-fp-f-verilator: $(addsuffix -verilator, $(filter rv64uf%, $(riscv-fp-tests)))
+
+run-benchmarks-verilator: $(addsuffix -verilator,$(riscv-benchmarks))
+
+# torture-specific
+torture-gen:
+	cd $(riscv-torture-dir) && $(riscv-torture-bin) 'generator/run'
+
+torture-itest:
+	cd $(riscv-torture-dir) && $(riscv-torture-bin) 'testrun/run -a output/test.S'
+
+torture-rtest: build
+	cd $(riscv-torture-dir) && printf "#!/bin/sh\ncd $(root-dir) && $(MAKE) run-torture$(torture-logs) batch-mode=1 defines=$(defines) test-location=$(test-location)" > call.sh && chmod +x call.sh
+	cd $(riscv-torture-dir) && $(riscv-torture-bin) 'testrun/run -r ./call.sh -a $(test-location).S' | tee $(test-location).log
+	make check-torture test-location=$(test-location)
+
+torture-dummy: build
+	cd $(riscv-torture-dir) && printf "#!/bin/sh\ncd $(root-dir) && $(MAKE) run-torture batch-mode=1 defines=$(defines) test-location=\$${@: -1}" > call.sh
+
+torture-rnight: build
+	cd $(riscv-torture-dir) && printf "#!/bin/sh\ncd $(root-dir) && $(MAKE) run-torture$(torture-logs) batch-mode=1 defines=$(defines) test-location=\$${@: -1}" > call.sh && chmod +x call.sh
+	cd $(riscv-torture-dir) && $(riscv-torture-bin) 'overnight/run -r ./call.sh -g none' | tee output/overnight.log
+	$(MAKE) check-torture
+
+torture-rtest-verilator: verilate
+	cd $(riscv-torture-dir) && printf "#!/bin/sh\ncd $(root-dir) && $(MAKE) run-torture-verilator batch-mode=1 defines=$(defines)" > call.sh && chmod +x call.sh
+	cd $(riscv-torture-dir) && $(riscv-torture-bin) 'testrun/run -r ./call.sh -a output/test.S' | tee output/test.log
+	$(MAKE) check-torture
+
+run-torture: build
+	vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +max-cycles=$(max_cycles)+UVM_TESTNAME=$(test_case)                                  \
+	+BASEDIR=$(riscv-torture-dir) $(uvm-flags) +jtag_rbb_enable=0 -gblso $(RISCV)/lib/libfesvr.so -sv_lib $(dpi-library)/ariane_dpi                                      \
+	${top_level}_optimized +permissive-off +signature=$(riscv-torture-dir)/$(test-location).rtlsim.sig ++$(riscv-torture-dir)/$(test-location) ++$(target-options)
+
+run-torture-log: build
+	vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +max-cycles=$(max_cycles)+UVM_TESTNAME=$(test_case)                                  \
+	+BASEDIR=$(riscv-torture-dir) $(uvm-flags) +jtag_rbb_enable=0 -gblso $(RISCV)/lib/libfesvr.so -sv_lib $(dpi-library)/ariane_dpi                                      \
+	${top_level}_optimized +permissive-off +signature=$(riscv-torture-dir)/$(test-location).rtlsim.sig ++$(riscv-torture-dir)/$(test-location) ++$(target-options)
+	cp vsim.wlf $(riscv-torture-dir)/$(test-location).wlf
+	cp trace_hart_0000.log $(riscv-torture-dir)/$(test-location).trace
+	cp trace_hart_0000_commit.log $(riscv-torture-dir)/$(test-location).commit
+	cp transcript $(riscv-torture-dir)/$(test-location).transcript
+
+run-torture-verilator: verilate
+	$(ver-library)/Variane_testharness +max-cycles=$(max_cycles) +signature=$(riscv-torture-dir)/output/test.rtlsim.sig $(riscv-torture-dir)/output/test
+
+check-torture:
+	grep 'All signatures match for $(test-location)' $(riscv-torture-dir)/$(test-location).log
+	diff -s $(riscv-torture-dir)/$(test-location).spike.sig $(riscv-torture-dir)/$(test-location).rtlsim.sig
+
+fpga_filter := $(addprefix $(root-dir), bootrom/bootrom.sv)
+fpga_filter += $(addprefix $(root-dir), include/instr_tracer_pkg.sv)
+fpga_filter += $(addprefix $(root-dir), src/util/ex_trace_item.sv)
+fpga_filter += $(addprefix $(root-dir), src/util/instr_trace_item.sv)
+fpga_filter += $(addprefix $(root-dir), src/util/instr_tracer_if.sv)
+fpga_filter += $(addprefix $(root-dir), src/util/instr_tracer.sv)
+
+fpga: $(ariane_pkg) $(util) $(src) $(fpga_src) $(uart_src)
+	@echo "[FPGA] Generate sources"
+	@echo read_vhdl        {$(uart_src)}    > fpga/scripts/add_sources.tcl
+	@echo read_verilog -sv {$(ariane_pkg)} >> fpga/scripts/add_sources.tcl
+	@echo read_verilog -sv {$(filter-out $(fpga_filter), $(util))}     >> fpga/scripts/add_sources.tcl
+	@echo read_verilog -sv {$(filter-out $(fpga_filter), $(src))} 	   >> fpga/scripts/add_sources.tcl
+	@echo read_verilog -sv {$(fpga_src)}   >> fpga/scripts/add_sources.tcl
+	@echo "[FPGA] Generate Bitstream"
+	cd fpga && make BOARD=$(BOARD) XILINX_PART=$(XILINX_PART) XILINX_BOARD=$(XILINX_BOARD) CLK_PERIOD_NS=$(CLK_PERIOD_NS)
+
+.PHONY: fpga
+
+build-spike:
+	cd tb/riscv-isa-sim && mkdir -p build && cd build && ../configure --prefix=`pwd`/../install --with-fesvr=$(RISCV) --enable-commitlog && make -j8 install
+
+clean:
+	rm -rf $(riscv-torture-dir)/output/test*
+	rm -rf $(library)/ $(dpi-library)/ $(ver-library)/
+	rm -f tmp/*.ucdb tmp/*.log *.wlf *vstf wlft* *.ucdb
+
+.PHONY:
+	build sim sim-verilate clean                                              \
+	$(riscv-asm-tests) $(addsuffix _verilator,$(riscv-asm-tests))             \
+	$(riscv-benchmarks) $(addsuffix _verilator,$(riscv-benchmarks))           \
+	check-benchmarks check-asm-tests                                          \
+	torture-gen torture-itest torture-rtest                                   \
+	run-torture run-torture-verilator check-torture check-torture-verilator
 

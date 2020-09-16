@@ -10,7 +10,7 @@ module bitmanip_unit (
 	input logic				    clk_i,           // positive edge clock
 	input logic				    rst_ni,          // synchronous reset
 	input logic				    flush_i,
-    output exception_t          bitmanip_exception_o,
+	output exception_t          bitmanip_exception_o,
 
 	// data input
 	input fu_data_t			    fu_data_i,
