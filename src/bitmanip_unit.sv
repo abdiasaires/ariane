@@ -2,7 +2,7 @@
 // A wrapper for the reference cores implemented in the riscv-bitmanip project
 //
 //
-
+import ariane_pkg::*;
 import ariane_bitmanip_pkg::*;
 
 module bitmanip_unit (

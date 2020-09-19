@@ -8,7 +8,7 @@ library        ?= work
 # verilator lib
 ver-library    ?= work-ver
 # Top level module to compile
-top_level      ?= ariane_tb
+top_level      ?= ariane_bitmanip_tb
 # library for DPI
 dpi-library    ?= work-dpi
 # DPI
@@ -149,8 +149,9 @@ src :=  $(filter-out src/ariane_regfile.sv, $(wildcard src/*.sv))              \
         src/tech_cells_generic/src/pulp_clock_mux2.sv                          \
         tb/ariane_testharness.sv                                               \
         tb/ariane_peripherals.sv                                               \
-        tb/common/uart.sv                                                      \
-        src/bitmanip/verilog/rvb_bitcnt/rvb_bitcnt.v
+        src/bitmanip/verilog/rvb_bitcnt/rvb_bitcnt.v                           \
+        tb/common/uart.sv                                                      
+       
 
 src := $(addprefix $(root-dir), $(src))
 
@@ -190,7 +191,7 @@ dpi = $(dpi_list)
 build: $(library) $(library)/.build-srcs $(library)/.build-tb $(dpi-library)/ariane_dpi.so
 	# Optimize top level
 	$(info ************  IN BUILD ************)
-	vopt$(questa_version) $(compile_flag) -work $(library)  $(top_level) -o $(top_level)_optimized +acc -check_synthesis
+	#vopt$(questa_version) $(compile_flag) -work $(library)  $(top_level) -o $(top_level)_optimized +acc -check_synthesis
 
 # src files
 $(library)/.build-srcs: $(util) $(library)
@@ -202,14 +203,14 @@ $(library)/.build-srcs: $(util) $(library)
 	# Suppress message that always_latch may not be checked thoroughly by QuestaSim.
 	vcom$(questa_version) $(compile_flag_vhd) -work $(library) -pedanticerrors $(filter %.vhd,$(uart_src))
 	# vcom$(questa_version) $(compile_flag_vhd) -work $(library) -pedanticerrors $(filter %.vhd,$(src))
-	vlog$(questa_version) $(compile_flag) -work $(library) -pedanticerrors $(filter %.sv,$(src)) $(list_incdir) -suppress 2583
+	vlog$(questa_version) $(compile_flag) -work $(library) -pedanticerrors $(filter %.sv,$(src)) $(filter %.v,$(src)) $(list_incdir) -suppress 2583
 	touch $(library)/.build-srcs
 
 # build TBs
 $(library)/.build-tb: $(dpi)
 	# Compile top level
 	$(info ************  IN BUILD TB ************)
-	vlog$(questa_version) $(compile_flag) -sv $(tbs) -work $(library)
+	vlog$(questa_version) $(compile_flag) -sv $(tbs) -work $(library) $(list_incdir)
 	touch $(library)/.build-tb
 
 $(library):
@@ -217,23 +218,27 @@ $(library):
 
 # compile DPIs
 $(dpi-library)/%.o: tb/dpi/%.cc $(dpi_hdr)
-	mkdir -p $(dpi-library)
-	$(CXX) -shared -fPIC -std=c++0x -Bsymbolic $(CFLAGS) -c $< -o $@
+	#mkdir -p $(dpi-library)
+	#$(CXX) -shared -fPIC -std=c++0x -Bsymbolic $(CFLAGS) -c $< -o $@
 
 $(dpi-library)/ariane_dpi.so: $(dpi)
 	$(info ************  IN ARIANE DPI ************)
-	mkdir -p $(dpi-library)
+	#mkdir -p $(dpi-library)
 	# Compile C-code and generate .so file
-	$(CXX) -shared -m64 -o $(dpi-library)/ariane_dpi.so $? -L$(RISCV)/lib -Wl,-rpath,$(RISCV)/lib -lfesvr
+	#$(CXX) -shared -m64 -o $(dpi-library)/ariane_dpi.so $? -L$(RISCV)/lib -Wl,-rpath,$(RISCV)/lib -lfesvr
 
 # single test runs on Questa can be started by calling make <testname>, e.g. make towers.riscv
 # the test names are defined in ci/riscv-asm-tests.list, and in ci/riscv-benchmarks.list
 # if you want to run in batch mode, use make <testname> batch-mode=1
 # alternatively you can call make sim elf-bin=<path/to/elf-bin> in order to load an arbitrary binary
 sim: build
+	#vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +MAX_CYCLES=$(max_cycles) +UVM_TESTNAME=$(test_case) \
+	#+BASEDIR=$(riscv-test-dir) $(uvm-flags) $(QUESTASIM_FLAGS) -gblso $(RISCV)/lib/libfesvr.so -sv_lib $(dpi-library)/ariane_dpi  \
+	#${top_level}_optimized +permissive-off ++$(elf-bin) ++$(target-options) | tee sim.log
+
 	vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +MAX_CYCLES=$(max_cycles) +UVM_TESTNAME=$(test_case) \
-	+BASEDIR=$(riscv-test-dir) $(uvm-flags) $(QUESTASIM_FLAGS) -gblso $(RISCV)/lib/libfesvr.so -sv_lib $(dpi-library)/ariane_dpi  \
-	${top_level}_optimized +permissive-off ++$(elf-bin) ++$(target-options) | tee sim.log
+	+BASEDIR=$(riscv-test-dir) $(uvm-flags) $(QUESTASIM_FLAGS)  \
+	${top_level} +permissive-off ++$(elf-bin) ++$(target-options) | tee sim.log
 
 $(riscv-asm-tests): build
 	vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +max-cycles=$(max_cycles) +UVM_TESTNAME=$(test_case) \

@@ -17,7 +17,7 @@
 import ariane_pkg::*;
 import uvm_pkg::*;
 
-`include "uvm_macros.svh"
+`include "../uvm-1.1b/src/uvm_macros.svh"
 
 //`define MAIN_MEM(P) dut.i_sram.genmem[0].i_ram.Mem_DP[(``P``)]
 `define MAIN_MEM dut.i_sram.genmem[0].i_ram.Mem_DP
