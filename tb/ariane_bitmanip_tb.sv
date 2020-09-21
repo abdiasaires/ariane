@@ -81,8 +81,8 @@ module ariane_bitmanip_tb;
             #(CLOCK_PERIOD/2) clk_i = ~clk_i;
         rst_ni = 1'b1;
         $display(" **************** Loading rom *******************");
-        $readmemh("../test-bitmanip/as/preloader.mem", `MAIN_MEM, 0, 1024);
-        $writememh("../test-bitmanip/as/preloader_w.mem", `MAIN_MEM, 0, 1024);
+        $readmemh("/home/abdias/Documents/ArianeBitmanip/ariane/test-bitmanip/as/preloader.mem", `MAIN_MEM, 0, 1024);
+        $writememh("/home/abdias/Documents/ArianeBitmanip/ariane/test-bitmanip/as/preloader_w.mem", `MAIN_MEM, 0, 1024);
 
         forever begin
             #(CLOCK_PERIOD/2) clk_i = 1'b1;
@@ -107,6 +107,7 @@ module ariane_bitmanip_tb;
         forever begin
 
             wait (exit_o[0]);
+
 
             if ((exit_o >> 1)) begin
                 `uvm_error( "Core Test",  $sformatf("*** FAILED *** (tohost = %0d)", (exit_o >> 1)))

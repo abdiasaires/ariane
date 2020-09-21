@@ -18,9 +18,15 @@ test-bitmanip  := $(root-dir)/test-bitmanip
 # Tcl start-up file
 tcl-run        := $(test-bitmanip)/run.tcl
 guicmd         := 
+clcmode          :=
 
 ifeq ($(gui), 1)
 	guicmd := -gui
+endif
+
+# Selection of command-line mode 
+ifeq ($(cl), 1)
+	clmode := -c
 endif
 
 # Sources  
@@ -165,9 +171,12 @@ fpga_src := $(addprefix $(root-dir), $(fpga_src))
 tbs := tb/ariane_bitmanip_tb.sv tb/ariane_testharness.sv
 
 # Questa flags
+
 compile_flag     += +cover=bcfst+/dut -incr -64 -nologo -quiet -suppress 13262 -permissive +define+$(defines)
 uvm-flags        += +UVM_NO_RELNOTES +UVM_VERBOSITY=LOW
-questa-flags     += -t 1ns -64 -coverage -classdebug $(gui-sim) $(QUESTASIM_FLAGS)
+# Removed flag for coverage
+#questa-flags     += -t 1ns -64 -coverage -classdebug $(gui-sim) $(QUESTASIM_FLAGS)
+questa-flags     += -t 1ns -64 -classdebug $(gui-sim) $(QUESTASIM_FLAGS)
 compile_flag_vhd += -64 -nologo -quiet -2008          
 
 # Search here for include files (e.g.: non-standalone components)
@@ -236,9 +245,9 @@ sim: build
 	#+BASEDIR=$(riscv-test-dir) $(uvm-flags) $(QUESTASIM_FLAGS) -gblso $(RISCV)/lib/libfesvr.so -sv_lib $(dpi-library)/ariane_dpi  \
 	#${top_level}_optimized +permissive-off ++$(elf-bin) ++$(target-options) | tee sim.log
 
-	vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +MAX_CYCLES=$(max_cycles) +UVM_TESTNAME=$(test_case) \
+	vsim${questa_version} -sv_lib /home/abdias/Documents/ArianeBitmanip/uvm-1.1b/lib/uvm_dpi +permissive $(questa-flags) $(questa-cmd) -lib $(library) +MAX_CYCLES=$(max_cycles) +UVM_TESTNAME=$(test_case) \
 	+BASEDIR=$(riscv-test-dir) $(uvm-flags) $(QUESTASIM_FLAGS)  \
-	${top_level} +permissive-off ++$(elf-bin) ++$(target-options) | tee sim.log
+	${top_level} +permissive-off ++$(elf-bin) $(clmode) ++$(target-options) | tee sim.log
 
 $(riscv-asm-tests): build
 	vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +max-cycles=$(max_cycles) +UVM_TESTNAME=$(test_case) \
