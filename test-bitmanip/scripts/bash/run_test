@@ -1,0 +1,8 @@
+# Launch Modelsim in comman-line mode 
+# Load the program to the RAM and execute it
+
+cd ../../..
+make -f Makefile sim cl=1 do=test-bitmanip/scripts/do/load_test.do
+
+# View waveforms
+vsim -view vsim.wlf

@@ -18,15 +18,20 @@ test-bitmanip  := $(root-dir)/test-bitmanip
 # Tcl start-up file
 tcl-run        := $(test-bitmanip)/run.tcl
 guicmd         := 
-clcmode          :=
+cl-cmd         :=
+do-cmd      :=
 
 ifeq ($(gui), 1)
 	guicmd := -gui
 endif
 
-# Selection of command-line mode 
+# Selection of command-line or batch modes 
 ifeq ($(cl), 1)
-	clmode := -c
+	cl-cmd := -c
+endif
+ 
+ifneq ($(strip $(do)),)
+    batch-cmd := -do $(do)
 endif
 
 # Sources  
@@ -247,7 +252,7 @@ sim: build
 
 	vsim${questa_version} -sv_lib /home/abdias/Documents/ArianeBitmanip/uvm-1.1b/lib/uvm_dpi +permissive $(questa-flags) $(questa-cmd) -lib $(library) +MAX_CYCLES=$(max_cycles) +UVM_TESTNAME=$(test_case) \
 	+BASEDIR=$(riscv-test-dir) $(uvm-flags) $(QUESTASIM_FLAGS)  \
-	${top_level} +permissive-off ++$(elf-bin) $(clmode) ++$(target-options) | tee sim.log
+	${top_level} +permissive-off ++$(elf-bin) $(cl-cmd) $(batch-cmd) ++$(target-options) | tee sim.log
 
 $(riscv-asm-tests): build
 	vsim${questa_version} +permissive $(questa-flags) $(questa-cmd) -lib $(library) +max-cycles=$(max_cycles) +UVM_TESTNAME=$(test_case) \
