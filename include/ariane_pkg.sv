@@ -467,9 +467,36 @@ package ariane_pkg;
                                // Floating-Point Classify Instruction
                                FCLASS,
                                // Vectorial Floating-Point Instructions that don't directly map onto the scalar ones
-                               VFMIN, VFMAX, VFSGNJ, VFSGNJN, VFSGNJX, VFEQ, VFNE, VFLT, VFGE, VFLE, VFGT, VFCPKAB_S, VFCPKCD_S, VFCPKAB_D, VFCPKCD_D,
-                               // Bitmanip functions
-                               BM_CLZ, BM_CTZ, BM_PCNT, BM_BMATFLIP, BM_SEXTB, BM_SEXTH
+                               VFMIN, VFMAX, VFSGNJ, VFSGNJN, VFSGNJX, VFEQ, VFNE, VFLT, VFGE, VFLE, VFGT, VFCPKAB_S, VFCPKCD_S, 
+                               VFCPKAB_D, VFCPKCD_D,
+                               
+                               // Bitmanip instructions
+                               
+                               // Single bit
+                               BM_BEXT, BM_BDEP, BM_GREV, BM_GORC, BM_SHFL, BM_UNSHFL,
+                               
+                               // Carry-less multiply
+                               BM_CLMUL, BM_CLMULR, BM_CLMULH,
+
+                               // Shift
+                               BM_SLL, BM_SRL, BM_SRA, BM_SLO, BM_SRO, BM_ROL, BM_ROR, BM_FSL, BM_FSR, BM_SLLIU,
+                               BM_SBSET, BM_SBCLR, BM_SBINV, BM_SBEXT, BM_BFP,
+                               
+                               // Bit matrix
+                               BM_BMATXOR, BM_BMATOR,
+                               
+                               // Simple
+                               BM_MIN, BM_MAX, BM_MINU, BM_MAXU, BM_ANDN, BM_ORN, BM_XNOR, 
+                               BM_PACK, BM_CMIX, BM_CMOV, BM_ADDIWU, BM_ADDWU, BM_SUBWU, BM_ADDUW, 
+                               BM_SUBUW,
+                               
+                               // Bit count
+                               BM_CLZ, BM_CTZ, BM_PCNT, BM_BMATFLIP, BM_SEXTB, BM_SEXTH,
+                               
+                               // Cycle Redundancy Check
+                               BM_CRCB, BM_CRCH, BM_CRCW, BM_CRCD, 
+                               BM_CRCCB, BM_CRCCH, BM_CRCCW, BM_CRCCD 
+                               
                              } fu_op;
 
     typedef struct packed {
