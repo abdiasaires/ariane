@@ -432,7 +432,7 @@ package ariane_pkg;
     // ---------------
     // EX Stage
     // ---------------
-    typedef enum logic [6:0] { // basic ALU op
+    typedef enum logic [7:0] { // basic ALU op
                                ADD, SUB, ADDW, SUBW,
                                // logic operations
                                XORL, ORL, ANDL,
@@ -471,24 +471,27 @@ package ariane_pkg;
                                VFCPKAB_D, VFCPKCD_D,
                                
                                // Bitmanip instructions
-                               
-                               // Single bit
-                               BM_BEXT, BM_BDEP, BM_GREV, BM_GORC, BM_SHFL, BM_UNSHFL,
-                               
+                                                             
                                // Carry-less multiply
                                BM_CLMUL, BM_CLMULR, BM_CLMULH,
+                               BM_CLMULW, BM_CLMULRW, BM_CLMULHW,
 
                                // Shift
                                BM_SLL, BM_SRL, BM_SRA, BM_SLO, BM_SRO, BM_ROL, BM_ROR, BM_FSL, BM_FSR, BM_SLLIU,
                                BM_SBSET, BM_SBCLR, BM_SBINV, BM_SBEXT, BM_BFP,
+                               BM_SLOW, BM_SROW, BM_ROLW, BM_RORW, BM_SBCLRW, BM_SBSETW, BM_SBINVW, BM_SBEXTW,
+                               BM_GORCW, BM_GREVW, BM_FSLW, BM_FSRW, BM_CLZW, BM_CTZW, BM_PCNTW,
                                
                                // Bit matrix
                                BM_BMATXOR, BM_BMATOR,
                                
                                // Simple
                                BM_MIN, BM_MAX, BM_MINU, BM_MAXU, BM_ANDN, BM_ORN, BM_XNOR, 
-                               BM_PACK, BM_CMIX, BM_CMOV, BM_ADDIWU, BM_ADDWU, BM_SUBWU, BM_ADDUW, 
-                               BM_SUBUW,
+                               BM_PACK, BM_PACKU, BM_PACKH, BM_CMIX, BM_CMOV, BM_ADDW, BM_ADDWU,
+                               BM_SUBWU, BM_ADDUW, SUBUW, BM_SUBUW,
+                               BM_PACKW, BM_PACKUW, BM_BFPW,
+                               BM_BEXT, BM_BDEP, BM_GREV, BM_GORC, BM_SHFL, BM_UNSHFL,
+                               BM_BDEPW, BM_BEXTW, 
                                
                                // Bit count
                                BM_CLZ, BM_CTZ, BM_PCNT, BM_BMATFLIP, BM_SEXTB, BM_SEXTH,

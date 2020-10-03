@@ -5,72 +5,6 @@
 import ariane_pkg::*;
 import ariane_bitmanip_pkg::*;
 
-module bitmanip_unit (
-	// control signals
-	input logic				    clk_i,           // positive edge clock
-	input logic				    rst_ni,          // synchronous reset
-	input logic				    flush_i,
-	output exception_t          bitmanip_exception_o,
-
-	// data input
-	input fu_data_t			    fu_data_i,
-    input logic                 bitmanip_valid_i,	
-	output logic	            bitmanip_ready_o,      // unit accepts input
-
-	// data output
-	output [TRANS_ID_BITS-1:0]	bitmanip_trans_id_o,
-	output logic                bitmanip_valid_o,         // output is valid
-	output logic [63:0]         bitmanip_result_o         // output value
-);
-
-    logic [63:0]                op1;
-    logic [BM_FUNC_NBITS-1:0]   bitmanip_func;
-    logic                       rst_p;
-    logic                       din_valid;
-
-	assign op1                  = fu_data_i.operand_a;
-    assign bitmanip_exception_o = '0;
-    assign din_valid            = bitmanip_valid_i;
-    assign bitmanip_trans_id_o  = fu_data_i.trans_id;
-    assign rst_p                = ~rst_ni;
-    assign bitmanip_ready_o     = 1'b1;
-    assign bitmanip_valid_o     = bitmanip_valid_i;
- 
-
-	// determine the bitmanip operation
-	always_comb begin : which_op
-		// check the operator's identifier
-		unique case (fu_data_i.operator)
-			BM_CLZ:      bitmanip_func	= BM_FUNC_CLZ;
-			BM_CTZ:      bitmanip_func	= BM_FUNC_CTZ;
-			BM_PCNT:     bitmanip_func	= BM_FUNC_PCNT;
-			BM_BMATFLIP: bitmanip_func	= BM_FUNC_BMATFLIP;
-			BM_SEXTB:    bitmanip_func	= BM_FUNC_SEXTB;
-			BM_SEXTH:    bitmanip_func	= BM_FUNC_SEXTH;
-			default:     bitmanip_func	= BM_FUNC_CTZ;
-		endcase
-	end
-
-	// bit-count module's instantiation
-	rvb_bitcnt #(
-        .XLEN (64),
-        .BMAT (1)       // enables the instruction bmatflip
-    ) rvb_bitcnt_i (
-		.clock			(clk_i),          
-		.reset			(rst_p),         
-		.din_valid,    
-		.din_ready		( ),    
-		.din_rs1		(op1),       
-		.din_insn3		(bitmanip_func[0]),      
-		.din_insn20		(bitmanip_func[1]),
-		.din_insn21		(bitmanip_func[2]),
-		.din_insn22		(bitmanip_func[3]),
-		.dout_valid		( ),
-		.dout_ready		(1'b1),     
-		.dout_rd		(bitmanip_result_o)         
-	);
-
-endmodule
 
 /*
  *  Copyright (C) 2019  Claire Wolf <claire@symbioticeda.com>
@@ -89,7 +23,19 @@ endmodule
  *
  */
 
-module rvb_full2 #(
+/*
+  Adaptation of the rvb_full module to the Ariane environment.
+  Changes performed:
+      - name of the interface signals
+      - protocol order: now 'valid_i' waits on 'ready_o'
+      - the instruction decoder is replaced by an operation decoder
+      - the transaction id is passed through the pipeline along the operation
+      - the rs2 operand (whether register- or immediate-based) is now selected in the issue stage
+ *
+ */
+
+
+module bitmanip_unit #(
 	parameter integer XLEN = 64
 ) (
 	// control signals
@@ -101,15 +47,16 @@ module rvb_full2 #(
 	// data input
 	input fu_data_t			    fu_data_i,
     input logic                 bitmanip_valid_i,	
-	output logic	            bitmanip_ready_o,      // unit accepts input
+	output logic	            bitmanip_ready_o,       // the unit accepts the input
 
 	// data output
 	output [TRANS_ID_BITS-1:0]	bitmanip_trans_id_o,
-	output logic                bitmanip_valid_o,         // output is valid
+	output logic                bitmanip_valid_o,         // the output is valid
 	output logic [63:0]         bitmanip_result_o         // output value
+    
 
 );
-    // Adjustment of the interface to Ariane's environment
+    // Adjustment to Ariane's interface
 
     logic           clock;
 	logic           reset;
@@ -124,17 +71,28 @@ module rvb_full2 #(
     logic           dout_ready;
     logic [63:0]    dout_rd;
     
+    logic [TRANS_ID_BITS-1:0]	trans_id;
+    logic [TRANS_ID_BITS-1:0]	in_trans_id_d;
+    logic [TRANS_ID_BITS-1:0]	in_trans_id_s;
+    logic [TRANS_ID_BITS-1:0]	out_trans_id_d;
+    logic [TRANS_ID_BITS-1:0]	out_trans_id_s;
+    logic [BM_FUNC_NBITS-1:0]   op_select;
+    logic [BM_FUNC_NBITS-1:0]   in_op_select;
+
+	wire stall;
+    
     assign clock                = clk_i;
-    assign reset                = ~rst_ni;
+    assign reset                = ~rst_ni | flush_i;
     assign din_valid            = bitmanip_valid_i;
     assign din_rs1              = fu_data_i.operand_a;
     assign din_rs2              = fu_data_i.operand_b;  // ***Operand_b or immediate?
     assign din_rs3              = fu_data_i.imm;
     assign bitmanip_valid_o     = dout_valid;
     assign dout_rd              = bitmanip_result_o;
-    assign dout_ready           = 1b'1;                 // The scoreboard is constantly ready to receive results    
+    assign dout_ready           = 1'b1;                 // The scoreboard is constantly ready for results    
+    assign bitmanip_exception_o = '0;
 	assign bitmanip_ready_o     = !stall;               // Protocol inversion: in Ariane, 'valid_i' 
-	                                                    //   depends on 'ready_o', not the contrary
+	                                                    //   waits on 'ready_o', not the contrary
 
 
 	wire insn_bextdep;
@@ -145,8 +103,10 @@ module rvb_full2 #(
 	wire insn_shifter;
 	wire insn_simple;
 
-	wire [XLEN-1:0] imm = $signed(din_insn[31:20]);
-	wire [XLEN-1:0] rs2 = din_insn[5] ? din_rs2 : imm;
+    // *** Unused section: the rs2 selection (whether a register or an immediate) is now made in the issue stage
+
+	// wire [XLEN-1:0] imm = $signed(din_insn[31:20]);
+	// wire [XLEN-1:0] rs2 = din_insn[5] ? din_rs2 : imm;
 
 `ifdef RVB_DEBUG
 	assign debug_rs2 = rs2;
@@ -159,6 +119,23 @@ module rvb_full2 #(
 	assign debug_insn_simple  = insn_simple;
 `endif
 
+    // Operation decoder
+
+    bm_op_decoder decoder (
+		.operation   (fu_data_i.operator),
+		.op_select   (op_select),
+		.insn_bextdep(insn_bextdep),
+		.insn_bitcnt (insn_bitcnt ),
+		.insn_bmatxor(insn_bmatxor),
+		.insn_clmul  (insn_clmul  ),
+		.insn_crc    (insn_crc    ),
+		.insn_shifter(insn_shifter),
+		.insn_simple (insn_simple )    
+    );
+    
+    // The instruction decoder is replaced by the operation decoder
+
+    /*     
 	rvb_full_decoder #(.XLEN(XLEN)) decoder (
 		.insn        (din_insn    ),
 		.insn_bextdep(insn_bextdep),
@@ -169,8 +146,9 @@ module rvb_full2 #(
 		.insn_shifter(insn_shifter),
 		.insn_simple (insn_simple )
 	);
+	*/
 
-	wire stall;
+
 	assign din_decoded = insn_bextdep || insn_bitcnt || insn_bmatxor || insn_clmul || insn_crc || insn_shifter || insn_simple;
 	assign din_ready = !reset && !stall && din_decoded;
 
@@ -194,7 +172,6 @@ module rvb_full2 #(
 	wire in_simple_ready;
 
 	reg [XLEN-1:0] in_rs1, in_rs2, in_rs3;
-	reg [31:0] in_insn;
 
 	always @(posedge clock) begin
 		if (in_bextdep_ready) in_bextdep <= 0;
@@ -206,17 +183,17 @@ module rvb_full2 #(
 		if (in_simple_ready ) in_simple  <= 0;
 
 		if (din_ready && din_valid) begin
-			in_bextdep <= insn_bextdep;
-			in_bitcnt  <= insn_bitcnt;
-			in_bmatxor <= insn_bmatxor;
-			in_clmul   <= insn_clmul;
-			in_crc     <= insn_crc;
-			in_shifter <= insn_shifter;
-			in_simple  <= insn_simple;
-			in_rs1     <= din_rs1;
-			in_rs2     <= rs2;
-			in_rs3     <= din_rs3;
-			in_insn    <= din_insn;
+			in_bextdep      <= insn_bextdep;
+			in_bitcnt       <= insn_bitcnt;
+			in_bmatxor      <= insn_bmatxor;
+			in_clmul        <= insn_clmul;
+			in_crc          <= insn_crc;
+			in_shifter      <= insn_shifter;
+			in_simple       <= insn_simple;
+			in_rs1          <= din_rs1;
+			in_rs2          <= din_rs2;
+			in_rs3          <= din_rs3;
+			in_op_select    <= op_select;
 		end
 
 		if (reset) begin
@@ -230,6 +207,18 @@ module rvb_full2 #(
 		end
 	end
 
+    // Transmission of the trans_id through the pipeline - input stage
+
+    always_comb trans_id_input : begin
+        in_trans_id_s       <= in_trans_id_d; 
+        if (din_ready && din_valid) begin
+            in_trans_id_s   <= trans_id;        
+        end
+    end
+
+	always @(posedge clock) begin
+        in_trans_id_d   <= in_trans_id_s;
+	end
 
 	// ---- Process Stage ----
 
@@ -262,11 +251,11 @@ module rvb_full2 #(
 		.din_ready  (in_bextdep_ready),
 		.din_rs1    (in_rs1     ),
 		.din_rs2    (in_rs2     ),
-		.din_insn3  (in_insn[3] ),
-		.din_insn13 (in_insn[13]),
-		.din_insn14 (in_insn[14]),
-		.din_insn29 (in_insn[29]),
-		.din_insn30 (in_insn[30]),
+		.din_insn3  (in_op_select[0] ),
+		.din_insn13 (in_op_select[1]),
+		.din_insn14 (in_op_select[2]),
+		.din_insn29 (in_op_select[3]),
+		.din_insn30 (in_op_select[4]),
 		.dout_valid (out_bextdep_valid),
 		.dout_ready (out_ready  ),
 		.dout_rd    (out_bextdep)
@@ -281,10 +270,10 @@ module rvb_full2 #(
 		.din_valid  (in_bitcnt  ),
 		.din_ready  (in_bitcnt_ready),
 		.din_rs1    (in_rs1     ),
-		.din_insn3  (in_insn[3] ),
-		.din_insn20 (in_insn[20]),
-		.din_insn21 (in_insn[21]),
-		.din_insn22 (in_insn[22]),
+		.din_insn3  (in_op_select[0] ),
+		.din_insn20 (in_op_select[1]),
+		.din_insn21 (in_op_select[2]),
+		.din_insn22 (in_op_select[3]),
 		.dout_valid (out_bitcnt_valid),
 		.dout_ready (out_ready  ),
 		.dout_rd    (out_bitcnt )
@@ -300,7 +289,7 @@ module rvb_full2 #(
 			.din_ready  (in_bmatxor_ready),
 			.din_rs1    (in_rs1     ),
 			.din_rs2    (in_rs2     ),
-			.din_insn30 (in_insn[30]),
+			.din_insn30 (in_op_select[0]),
 			.dout_valid (out_bmatxor_valid),
 			.dout_ready (out_ready  ),
 			.dout_rd    (out_bmatxor)
@@ -320,9 +309,9 @@ module rvb_full2 #(
 		.din_ready  (in_clmul_ready),
 		.din_rs1    (in_rs1     ),
 		.din_rs2    (in_rs2     ),
-		.din_insn3  (in_insn[3] ),
-		.din_insn12 (in_insn[12]),
-		.din_insn13 (in_insn[13]),
+		.din_insn3  (in_op_select[0]),
+		.din_insn12 (in_op_select[1]),
+		.din_insn13 (in_op_select[2]),
 		.dout_valid (out_clmul_valid),
 		.dout_ready (out_ready  ),
 		.dout_rd    (out_clmul  )
@@ -336,9 +325,9 @@ module rvb_full2 #(
 		.din_valid  (in_crc     ),
 		.din_ready  (in_crc_ready),
 		.din_rs1    (in_rs1     ),
-		.din_insn20 (in_insn[20]),
-		.din_insn21 (in_insn[21]),
-		.din_insn23 (in_insn[23]),
+		.din_insn20 (in_op_select[0]),
+		.din_insn21 (in_op_select[1]),
+		.din_insn23 (in_op_select[2]),
 		.dout_valid (out_crc_valid),
 		.dout_ready (out_ready  ),
 		.dout_rd    (out_crc    )
@@ -356,13 +345,13 @@ module rvb_full2 #(
 		.din_rs1    (in_rs1     ),
 		.din_rs2    (in_rs2     ),
 		.din_rs3    (in_rs3     ),
-		.din_insn3  (in_insn[3] ),
-		.din_insn13 (in_insn[13]),
-		.din_insn14 (in_insn[14]),
-		.din_insn26 (in_insn[26]),
-		.din_insn27 (in_insn[27]),
-		.din_insn29 (in_insn[29]),
-		.din_insn30 (in_insn[30]),
+		.din_insn3  (in_op_select[0]),
+		.din_insn13 (in_op_select[1]),
+		.din_insn14 (in_op_select[2]),
+		.din_insn26 (in_op_select[3]),
+		.din_insn27 (in_op_select[4]),
+		.din_insn29 (in_op_select[5]),
+		.din_insn30 (in_op_select[6]),
 		.dout_valid (out_shifter_valid),
 		.dout_ready (out_ready  ),
 		.dout_rd    (out_shifter)
@@ -378,15 +367,15 @@ module rvb_full2 #(
 		.din_rs1    (in_rs1     ),
 		.din_rs2    (in_rs2     ),
 		.din_rs3    (in_rs3     ),
-		.din_insn3  (in_insn[3] ),
-		.din_insn5  (in_insn[5] ),
-		.din_insn12 (in_insn[12]),
-		.din_insn13 (in_insn[13]),
-		.din_insn14 (in_insn[14]),
-		.din_insn25 (in_insn[25]),
-		.din_insn26 (in_insn[26]),
-		.din_insn27 (in_insn[27]),
-		.din_insn30 (in_insn[30]),
+		.din_insn3  (in_op_select[0]),
+		.din_insn5  (in_op_select[1]),
+		.din_insn12 (in_op_select[2]),
+		.din_insn13 (in_op_select[3]),
+		.din_insn14 (in_op_select[4]),
+		.din_insn25 (in_op_select[5]),
+		.din_insn26 (in_op_select[6]),
+		.din_insn27 (in_op_select[7]),
+		.din_insn30 (in_op_select[8]),
 		.dout_valid (out_simple_valid),
 		.dout_ready (out_ready  ),
 		.dout_rd    (out_simple )
@@ -424,7 +413,6 @@ module rvb_full2 #(
 	assign dout_valid = !reset && output_valid;
 	assign dout_rd = output_value;
 
-
 	// ---- Arbiter ----
 
 	reg busy, busy_reg;
@@ -447,6 +435,27 @@ module rvb_full2 #(
 	always @(posedge clock) begin
 		busy_reg <= busy;
 	end
+
+    // Transmission of the trans_id through the pipeline - output stage
+
+    always_comb trans_id_output : begin
+        out_trans_id_s       <= out_trans_id_d; 
+
+		if (out_ready & out_any_valid) begin
+            out_trans_id_s   <= in_trans_id_d;                    
+		end
+		
+		if (reset) begin
+			out_trans_id_s <= '0;
+		end
+    end
+
+	always @(posedge clock) begin
+        out_trans_id_d   <= out_trans_id_s;
+	end
+
+    assign bitmanip_trans_id_o = out_trans_id_d; 
+
 endmodule
 
 module bm_op_decoder #(
@@ -465,369 +474,248 @@ module bm_op_decoder #(
 		unique case (operation)
 		    // Bit count
 		    
-			BM_CLZ:      
-			    op_select	    = BM_FUNC_CLZ;
-			    insn_bitcnt     = 1b'1;
-			BM_CTZ:      
-			    op_select	    = BM_FUNC_CTZ;
-			    insn_bitcnt     = 1b'1;
-			BM_PCNT:     
-			    op_select	    = BM_FUNC_PCNT;
-			    insn_bitcnt     = 1b'1;
-			BM_BMATFLIP: 
-			    op_select	    = BM_FUNC_BMATFLIP;
-			    insn_bitcnt     = 1b'1;
-			BM_SEXTB:    
-			    op_select	    = BM_FUNC_SEXTB;
-			    insn_bitcnt     = 1b'1;
-			BM_SEXTH:    
-			    op_select	    = BM_FUNC_SEXTH;
-			    insn_bitcnt     = 1b'1;
+			BM_CLZ: begin     
+			    op_select	    <= BM_FUNC_CLZ;
+			    insn_bitcnt     <= 1'b1; 
+			    end
+			BM_CTZ: begin      
+			    op_select	    <= BM_FUNC_CTZ;
+			    insn_bitcnt     <= 1'b1; 
+			    end
+			BM_PCNT: begin     
+			    op_select	    <= BM_FUNC_PCNT;
+			    insn_bitcnt     <= 1'b1; 
+			    end
+			BM_BMATFLIP: begin 
+			    op_select	    <= BM_FUNC_BMATFLIP;
+			    insn_bitcnt     <= 1'b1; 
+			    end
+			BM_SEXTB: begin    
+			    op_select	    <= BM_FUNC_SEXTB;
+			    insn_bitcnt     <= 1'b1; 
+			    end
+			BM_SEXTH: begin    
+			    op_select	    <= BM_FUNC_SEXTH;
+			    insn_bitcnt     <= 1'b1; 
+			    end
 			
 			// Bextdep
 			
-			BM_BEXT:
-                op_select	    = BM_FUNC_BEXT;
-			    insn_bextdep    = 1b'1;			
-			BM_BDEP:
-                op_select	    = BM_FUNC_BDEP;
-			    insn_bextdep    = 1b'1;			
-			BM_GREV:
-                op_select	    = BM_FUNC_GREV;
-			    insn_bextdep    = 1b'1;			
-			BM_GORC:
-                op_select	    = BM_FUNC_GORC;
-			    insn_bextdep    = 1b'1;			
-			BM_SHFL:
-                op_select	    = BM_FUNC_SHFL;
-			    insn_bextdep    = 1b'1;			
-			BM_UNSHFL:
-                op_select	    = BM_FUNC_UNSHFL;
-			    insn_bextdep    = 1b'1;
+			BM_BEXT: begin
+                op_select	    <= BM_FUNC_BEXT;
+			    insn_bextdep    <= 1'b1; 
+			    end			
+			BM_BDEP: begin
+                op_select	    <= BM_FUNC_BDEP;
+			    insn_bextdep    <= 1'b1; 
+			    end			
+			BM_GREV: begin
+                op_select	    <= BM_FUNC_GREV;
+			    insn_bextdep    <= 1'b1; 
+			    end			
+			BM_GORC: begin
+                op_select	    <= BM_FUNC_GORC;
+			    insn_bextdep    <= 1'b1; 
+			    end			
+			BM_SHFL: begin
+                op_select	    <= BM_FUNC_SHFL;
+			    insn_bextdep    <= 1'b1; 
+			    end			
+			BM_UNSHFL: begin
+                op_select	    <= BM_FUNC_UNSHFL;
+			    insn_bextdep    <= 1'b1; 
+			    end
 			    
 			// Carry-less multiply
 			
-            BM_CLMUL:
-                op_select	    = BM_FUNC_CLMUL;
-			    insn_clmul      = 1b'1;
-            BM_CLMULR:
-                op_select	    = BM_FUNC_CLMULR;
-			    insn_clmul      = 1b'1;
-            BM_CLMULH:
-                op_select	    = BM_FUNC_CLMULH;
-			    insn_clmul      = 1b'1;
+            BM_CLMUL: begin
+                op_select	    <= BM_FUNC_CLMUL;
+			    insn_clmul      <= 1'b1; 
+			    end
+            BM_CLMULR: begin
+                op_select	    <= BM_FUNC_CLMULR;
+			    insn_clmul      <= 1'b1; 
+			    end
+            BM_CLMULH: begin
+                op_select	    <= BM_FUNC_CLMULH;
+			    insn_clmul      <= 1'b1; 
+			    end
 			    
 			// Shift
 			
-           BM_SLL:
-                op_select	    = BM_FUNC_SLL;
-			    insn_shifter    = 1b'1;
-           BM_SRL:
-                op_select	    = BM_FUNC_SRL;
-			    insn_shifter    = 1b'1;
-           BM_SRA:
-                op_select	    = BM_FUNC_SRA;
-			    insn_shifter    = 1b'1;
-           BM_SLO:
-                op_select	    = BM_FUNC_SLO;
-			    insn_shifter    = 1b'1;
-           BM_SRO:
-                op_select	    = BM_FUNC_SRO;
-			    insn_shifter    = 1b'1;
-           BM_ROL:
-                op_select	    = BM_FUNC_ROL;
-			    insn_shifter    = 1b'1;
-           BM_ROR:
-                op_select	    = BM_FUNC_ROR;
-			    insn_shifter    = 1b'1;
-           BM_FSL:
-                op_select	    = BM_FUNC_FSL;
-			    insn_shifter    = 1b'1;
-           BM_FSR:
-                op_select	    = BM_FUNC_FSR;
-			    insn_shifter    = 1b'1;
-           BM_SLLIU:
-                op_select	    = BM_FUNC_SLLIU;
-			    insn_shifter    = 1b'1;
-           BM_SBSET:
-                op_select	    = BM_FUNC_SBSET;
-			    insn_shifter    = 1b'1;
-		   BM_SBSETW:
-		        op_select       = BM_FUNC_SBSETW;
-		        insn_shifter    = 1b'1;
-           BM_SBCLR:
-                op_select	    = BM_FUNC_SBCLR;
-			    insn_shifter    = 1b'1;
-           BM_SBINV:
-                op_select	    = BM_FUNC_SBINV;
-			    insn_shifter    = 1b'1;
-           BM_SBEXT:
-                op_select	    = BM_FUNC_SBEXT;
-			    insn_shifter    = 1b'1;
-           BM_BFP:
-                op_select	    = BM_FUNC_BFP;
-			    insn_shifter    = 1b'1;
+           BM_SLL: begin
+                op_select	    <= BM_FUNC_SLL;
+			    insn_shifter    <= 1'b1; 
+			    end
+           BM_SRL: begin
+                op_select	    <= BM_FUNC_SRL;
+			    insn_shifter    <= 1'b1; 
+			    end
+           BM_SRA: begin
+                op_select	    <= BM_FUNC_SRA;
+			    insn_shifter    <= 1'b1; 
+			    end
+           BM_SLO: begin
+                op_select	    <= BM_FUNC_SLO;
+			    insn_shifter    <= 1'b1; 
+			    end
+           BM_SRO: begin
+                op_select	    <= BM_FUNC_SRO;
+			    insn_shifter    <= 1'b1; 
+			    end
+           BM_ROL: begin
+                op_select	    <= BM_FUNC_ROL;
+			    insn_shifter    <= 1'b1; 
+			    end
+           BM_ROR: begin
+                op_select	    <= BM_FUNC_ROR;
+			    insn_shifter    <= 1'b1; 
+			    end
+           BM_FSL: begin
+                op_select	    <= BM_FUNC_FSL;
+			    insn_shifter    <= 1'b1; 
+			    end
+           BM_FSR: begin
+                op_select	    <= BM_FUNC_FSR;
+			    insn_shifter    <= 1'b1; 
+			    end
+           BM_SLLIU: begin
+                op_select	    <= BM_FUNC_SLLIU;
+			    insn_shifter    <= 1'b1; 
+			    end
+           BM_SBSET: begin
+                op_select	    <= BM_FUNC_SBSET;
+			    insn_shifter    <= 1'b1; 
+			    end
+		   BM_SBSETW: begin
+		        op_select       <= BM_FUNC_SBSETW;
+		        insn_shifter    <= 1'b1; 
+		        end
+           BM_SBCLR: begin
+                op_select	    <= BM_FUNC_SBCLR;
+			    insn_shifter    <= 1'b1; 
+			    end
+           BM_SBINV: begin
+                op_select	    <= BM_FUNC_SBINV;
+			    insn_shifter    <= 1'b1; 
+			    end
+           BM_SBEXT: begin
+                op_select	    <= BM_FUNC_SBEXT;
+			    insn_shifter    <= 1'b1; 
+			    end
+           BM_BFP: begin
+                op_select	    <= BM_FUNC_BFP;
+			    insn_shifter    <= 1'b1; 
+			    end
 			
 		   // Bit matrix
 		   
-           BM_BMATXOR:
-                op_select	    = BM_FUNC_BMATXOR;
-			    insn_bmatxor    = 1b'1;
-           BM_BMATOR:
-                op_select	    = BM_FUNC_BMATOR;
-			    insn_bmatxor    = 1b'1;
+           BM_BMATXOR: begin
+                op_select	    <= BM_FUNC_BMATXOR;
+			    insn_bmatxor    <= 1'b1; 
+			    end
+           BM_BMATOR: begin
+                op_select	    <= BM_FUNC_BMATOR;
+			    insn_bmatxor    <= 1'b1; 
+			    end
            
            // Simple
            
-           BM_MIN:
-                op_select	    = BM_FUNC_MIN;
-			    insn_simple     = 1b'1;
-           BM_MAX:
-                op_select	    = BM_FUNC_MAX;
-			    insn_simple     = 1b'1;
-           BM_MINU:
-                op_select	    = BM_FUNC_MINU;
-			    insn_simple     = 1b'1;
-           BM_MAXU:
-                op_select	    = BM_FUNC_MAXU;
-			    insn_simple     = 1b'1;
-           BM_ANDN:
-                op_select	    = BM_FUNC_ANDN;
-			    insn_simple     = 1b'1;
-           BM_ORN:
-                op_select	    = BM_FUNC_ORN;
-			    insn_simple     = 1b'1;
-           BM_XNOR: 
-                op_select	    = BM_FUNC_XNOR;
-			    insn_simple     = 1b'1;
-           BM_PACK:
-                op_select	    = BM_FUNC_PACK;
-			    insn_simple     = 1b'1;
-           BM_CMIX:
-                op_select	    = BM_FUNC_CMIX;
-			    insn_simple     = 1b'1;
-           BM_CMOV:
-                op_select	    = BM_FUNC_CMOV;
-			    insn_simple     = 1b'1;
-           BM_ADDIWU:
-                op_select	    = BM_FUNC_ADDIWU;
-			    insn_simple     = 1b'1;
-           BM_ADDWU:
-                op_select	    = BM_FUNC_ADDWU;
-			    insn_simple     = 1b'1;
-           BM_SUBWU:
-                op_select	    = BM_FUNC_SUBWU;
-			    insn_simple     = 1b'1;
-           BM_ADDUW:
-                op_select	    = BM_FUNC_ADDUW;
-			    insn_simple     = 1b'1;            
-           BM_SUBUW:
-                op_select	    = BM_FUNC_SUBUW;
-			    insn_simple     = 1b'1;
+           BM_MIN: begin
+                op_select	    <= BM_FUNC_MIN;
+			    insn_simple     <= 1'b1; 
+			    end
+           BM_MAX: begin
+                op_select	    <= BM_FUNC_MAX;
+			    insn_simple     <= 1'b1; 
+			    end
+           BM_MINU: begin
+                op_select	    <= BM_FUNC_MINU;
+			    insn_simple     <= 1'b1; 
+			    end
+           BM_MAXU: begin
+                op_select	    <= BM_FUNC_MAXU;
+			    insn_simple     <= 1'b1; 
+			    end
+           BM_ANDN: begin
+                op_select	    <= BM_FUNC_ANDN;
+			    insn_simple     <= 1'b1; 
+			    end
+           BM_ORN: begin
+                op_select	    <= BM_FUNC_ORN;
+			    insn_simple     <= 1'b1; 
+			    end
+           BM_XNOR: begin 
+                op_select	    <= BM_FUNC_XNOR;
+			    insn_simple     <= 1'b1; 
+			    end
+           BM_PACK: begin
+                op_select	    <= BM_FUNC_PACK;
+			    insn_simple     <= 1'b1; 
+			    end
+           BM_CMIX: begin
+                op_select	    <= BM_FUNC_CMIX;
+			    insn_simple     <= 1'b1; 
+			    end
+           BM_CMOV: begin
+                op_select	    <= BM_FUNC_CMOV;
+			    insn_simple     <= 1'b1; 
+			    end
+           BM_ADDWU: begin
+                op_select	    <= BM_FUNC_ADDWU;
+			    insn_simple     <= 1'b1; 
+			    end
+           BM_SUBWU: begin
+                op_select	    <= BM_FUNC_SUBWU;
+			    insn_simple     <= 1'b1; 
+			    end
+           BM_ADDUW: begin
+                op_select	    <= BM_FUNC_ADDUW;
+			    insn_simple     <= 1'b1; 
+			    end            
+           BM_SUBUW: begin
+                op_select	    <= BM_FUNC_SUBUW;
+			    insn_simple     <= 1'b1; 
+			    end
            
            // Cycle redundancy check
            
-           BM_CRCB:
-                op_select	    = BM_FUNC_CRCB;
-			    insn_crc        = 1b'1;            
-           BM_CRCH:
-                op_select	    = BM_FUNC_CRCH;
-			    insn_crch       = 1b'1;            
-           BM_CRCW:
-                op_select	    = BM_FUNC_CRCW;
-			    insn_crc        = 1b'1;            
-           BM_CRCD: 
-                op_select	    = BM_FUNC_CRCD;
-			    insn_crc        = 1b'1;            
-           BM_CRCCB:
-                op_select	    = BM_FUNC_CRCCB;
-			    insn_crc        = 1b'1;            
-           BM_CRCCH:
-                op_select	    = BM_FUNC_CRCCH;
-			    insn_crc        = 1b'1;            
-           BM_CRCCW:
-                op_select	    = BM_FUNC_CRCCW;
-			    insn_crc        = 1b'1;            
-           BM_CRCCD: 	
-                op_select	    = BM_FUNC_CRCCD;
-			    insn_crc        = 1b'1;            
-
-			
-	       default:     op_select	= BM_FUNC_CTZ;
+           BM_CRCB: begin
+                op_select	    <= BM_FUNC_CRCB;
+			    insn_crc        <= 1'b1; 
+			    end            
+           BM_CRCH: begin
+                op_select	    <= BM_FUNC_CRCH;
+			    insn_crc        <= 1'b1; 
+			    end            
+           BM_CRCW: begin
+                op_select	    <= BM_FUNC_CRCW;
+			    insn_crc        <= 1'b1;
+			    end            
+           BM_CRCD: begin 
+                op_select	    <= BM_FUNC_CRCD;
+			    insn_crc        <= 1'b1; 
+			    end            
+           BM_CRCCB: begin
+                op_select	    <= BM_FUNC_CRCCB;
+			    insn_crc        <= 1'b1; 
+			    end            
+           BM_CRCCH: begin
+                op_select	    <= BM_FUNC_CRCCH;
+			    insn_crc        <= 1'b1; 
+			    end            
+           BM_CRCCW: begin
+                op_select	    <= BM_FUNC_CRCCW;
+			    insn_crc        <= 1'b1; 
+			    end            
+           BM_CRCCD: begin 	
+                op_select	    <= BM_FUNC_CRCCD;
+			    insn_crc        <= 1'b1; 
+			    end            			
+	       default:     op_select	<= BM_FUNC_CTZ;
 		endcase
 	end
 
-	always @* begin
-		insn_bextdep = 0;
-		insn_bitcnt  = 0;
-		insn_bmatxor = 0;
-		insn_clmul   = 0;
-		insn_crc     = 0;
-		insn_shifter = 0;
-		insn_simple  = 0;
-
-		(* parallel_case *)
-		casez ({insn, XLEN == 64})
-			33'b 0100000_zzzzz_zzzzz_111_zzzzz_0110011_z: insn_simple = 1;  // ANDN
-			33'b 0100000_zzzzz_zzzzz_110_zzzzz_0110011_z: insn_simple = 1;  // ORN
-			33'b 0100000_zzzzz_zzzzz_100_zzzzz_0110011_z: insn_simple = 1;  // XNOR
-
-			33'b 0010000_zzzzz_zzzzz_010_zzzzz_0110011_z: insn_simple = 1;  // SH1ADD
-			33'b 0010000_zzzzz_zzzzz_100_zzzzz_0110011_z: insn_simple = 1;  // SH2ADD
-			33'b 0010000_zzzzz_zzzzz_110_zzzzz_0110011_z: insn_simple = 1;  // SH3ADD
-
-			33'b 0000000_zzzzz_zzzzz_001_zzzzz_0110011_z: insn_shifter = 1; // SLL
-			33'b 0000000_zzzzz_zzzzz_101_zzzzz_0110011_z: insn_shifter = 1; // SRL
-			33'b 0100000_zzzzz_zzzzz_101_zzzzz_0110011_z: insn_shifter = 1; // SRA
-			33'b 0010000_zzzzz_zzzzz_001_zzzzz_0110011_z: insn_shifter = 1; // SLO
-			33'b 0010000_zzzzz_zzzzz_101_zzzzz_0110011_z: insn_shifter = 1; // SRO
-			33'b 0110000_zzzzz_zzzzz_001_zzzzz_0110011_z: insn_shifter = 1; // ROL
-			33'b 0110000_zzzzz_zzzzz_101_zzzzz_0110011_z: insn_shifter = 1; // ROR
-
-			33'b 0100100_zzzzz_zzzzz_001_zzzzz_0110011_z: insn_shifter = 1; // SBCLR
-			33'b 0010100_zzzzz_zzzzz_001_zzzzz_0110011_z: insn_shifter = 1; // SBSET
-			33'b 0110100_zzzzz_zzzzz_001_zzzzz_0110011_z: insn_shifter = 1; // SBINV
-			33'b 0100100_zzzzz_zzzzz_101_zzzzz_0110011_z: insn_shifter = 1; // SBEXT
-			33'b 0010100_zzzzz_zzzzz_101_zzzzz_0110011_z: insn_bextdep = 1; // GORC
-			33'b 0110100_zzzzz_zzzzz_101_zzzzz_0110011_z: insn_bextdep = 1; // GREV
-
-			33'b 00000_00zzzzz_zzzzz_001_zzzzz_0010011_0: insn_shifter = 1; // SLLI (RV32)
-			33'b 00000_00zzzzz_zzzzz_101_zzzzz_0010011_0: insn_shifter = 1; // SRLI (RV32)
-			33'b 01000_00zzzzz_zzzzz_101_zzzzz_0010011_0: insn_shifter = 1; // SRAI (RV32)
-			33'b 00100_00zzzzz_zzzzz_001_zzzzz_0010011_0: insn_shifter = 1; // SLOI (RV32)
-			33'b 00100_00zzzzz_zzzzz_101_zzzzz_0010011_0: insn_shifter = 1; // SROI (RV32)
-			33'b 01100_00zzzzz_zzzzz_101_zzzzz_0010011_0: insn_shifter = 1; // RORI (RV32)
-
-			33'b 00000_0zzzzzz_zzzzz_001_zzzzz_0010011_1: insn_shifter = 1; // SLLI (RV64)
-			33'b 00000_0zzzzzz_zzzzz_101_zzzzz_0010011_1: insn_shifter = 1; // SRLI (RV64)
-			33'b 01000_0zzzzzz_zzzzz_101_zzzzz_0010011_1: insn_shifter = 1; // SRAI (RV64)
-			33'b 00100_0zzzzzz_zzzzz_001_zzzzz_0010011_1: insn_shifter = 1; // SLOI (RV64)
-			33'b 00100_0zzzzzz_zzzzz_101_zzzzz_0010011_1: insn_shifter = 1; // SROI (RV64)
-			33'b 01100_0zzzzzz_zzzzz_101_zzzzz_0010011_1: insn_shifter = 1; // RORI (RV64)
-
-			33'b 01001_00zzzzz_zzzzz_001_zzzzz_0010011_0: insn_shifter = 1; // SBCLRI (RV32)
-			33'b 00101_00zzzzz_zzzzz_001_zzzzz_0010011_0: insn_shifter = 1; // SBSETI (RV32)
-			33'b 01101_00zzzzz_zzzzz_001_zzzzz_0010011_0: insn_shifter = 1; // SBINVI (RV32)
-			33'b 01001_00zzzzz_zzzzz_101_zzzzz_0010011_0: insn_shifter = 1; // SBEXTI (RV32)
-			33'b 00101_00zzzzz_zzzzz_101_zzzzz_0010011_0: insn_bextdep = 1; // GORCI (RV32)
-			33'b 01101_00zzzzz_zzzzz_101_zzzzz_0010011_0: insn_bextdep = 1; // GREVI (RV32)
-
-			33'b 01001_0zzzzzz_zzzzz_001_zzzzz_0010011_1: insn_shifter = 1; // SBCLRI (RV64)
-			33'b 00101_0zzzzzz_zzzzz_001_zzzzz_0010011_1: insn_shifter = 1; // SBSETI (RV64)
-			33'b 01101_0zzzzzz_zzzzz_001_zzzzz_0010011_1: insn_shifter = 1; // SBINVI (RV64)
-			33'b 01001_0zzzzzz_zzzzz_101_zzzzz_0010011_1: insn_shifter = 1; // SBEXTI (RV64)
-			33'b 00101_0zzzzzz_zzzzz_101_zzzzz_0010011_1: insn_shifter = 1; // GORCI (RV64)
-			33'b 01101_0zzzzzz_zzzzz_101_zzzzz_0010011_1: insn_shifter = 1; // GREVI (RV64)
-
-			33'b zzzzz11_zzzzz_zzzzz_001_zzzzz_0110011_z: insn_simple  = 1; // CMIX
-			33'b zzzzz11_zzzzz_zzzzz_101_zzzzz_0110011_z: insn_simple  = 1; // CMOV
-			33'b zzzzz10_zzzzz_zzzzz_001_zzzzz_0110011_z: insn_shifter = 1; // FSL
-			33'b zzzzz10_zzzzz_zzzzz_101_zzzzz_0110011_z: insn_shifter = 1; // FSR
-			33'b zzzzz1_0zzzzz_zzzzz_101_zzzzz_0010011_0: insn_shifter = 1; // FSRI (RV32)
-			33'b zzzzz1_zzzzzz_zzzzz_101_zzzzz_0010011_1: insn_shifter = 1; // FSRI (RV64)
-
-			33'b 0110000_00000_zzzzz_001_zzzzz_0010011_z: insn_bitcnt  = 1; // CLZ
-			33'b 0110000_00001_zzzzz_001_zzzzz_0010011_z: insn_bitcnt  = 1; // CTZ
-			33'b 0110000_00010_zzzzz_001_zzzzz_0010011_z: insn_bitcnt  = 1; // PCNT
-			33'b 0110000_00011_zzzzz_001_zzzzz_0010011_1: insn_bitcnt  = 1; // BMATFLIP
-			33'b 0110000_00100_zzzzz_001_zzzzz_0010011_z: insn_bitcnt  = 1; // SEXT.B
-			33'b 0110000_00101_zzzzz_001_zzzzz_0010011_z: insn_bitcnt  = 1; // SEXT.H
-
-			33'b 0110000_10000_zzzzz_001_zzzzz_0010011_z: insn_crc     = 1; // CRC32.B
-			33'b 0110000_10001_zzzzz_001_zzzzz_0010011_z: insn_crc     = 1; // CRC32.H
-			33'b 0110000_10010_zzzzz_001_zzzzz_0010011_z: insn_crc     = 1; // CRC32.W
-			33'b 0110000_10011_zzzzz_001_zzzzz_0010011_z: insn_crc     = 1; // CRC32.D
-			33'b 0110000_11000_zzzzz_001_zzzzz_0010011_z: insn_crc     = 1; // CRC32C.B
-			33'b 0110000_11001_zzzzz_001_zzzzz_0010011_z: insn_crc     = 1; // CRC32C.H
-			33'b 0110000_11010_zzzzz_001_zzzzz_0010011_z: insn_crc     = 1; // CRC32C.W
-			33'b 0110000_11011_zzzzz_001_zzzzz_0010011_z: insn_crc     = 1; // CRC32C.D
-
-			33'b 0000101_zzzzz_zzzzz_001_zzzzz_0110011_z: insn_clmul   = 1; // CLMUL
-			33'b 0000101_zzzzz_zzzzz_010_zzzzz_0110011_z: insn_clmul   = 1; // CLMULR
-			33'b 0000101_zzzzz_zzzzz_011_zzzzz_0110011_z: insn_clmul   = 1; // CLMULH
-			33'b 0000101_zzzzz_zzzzz_100_zzzzz_0110011_z: insn_simple  = 1; // MIN
-			33'b 0000101_zzzzz_zzzzz_101_zzzzz_0110011_z: insn_simple  = 1; // MAX
-			33'b 0000101_zzzzz_zzzzz_110_zzzzz_0110011_z: insn_simple  = 1; // MINU
-			33'b 0000101_zzzzz_zzzzz_111_zzzzz_0110011_z: insn_simple  = 1; // MAXU
-
-			33'b 0000100_zzzzz_zzzzz_001_zzzzz_0110011_z: insn_bextdep = 1; // SHFL
-			33'b 0000100_zzzzz_zzzzz_101_zzzzz_0110011_z: insn_bextdep = 1; // UNSHFL
-			33'b 0100100_zzzzz_zzzzz_110_zzzzz_0110011_z: insn_bextdep = 1; // BDEP
-			33'b 0000100_zzzzz_zzzzz_110_zzzzz_0110011_z: insn_bextdep = 1; // BEXT
-			33'b 0000100_zzzzz_zzzzz_100_zzzzz_0110011_z: insn_simple  = 1; // PACK
-			33'b 0100100_zzzzz_zzzzz_100_zzzzz_0110011_z: insn_simple  = 1; // PACKU
-			33'b 0000100_zzzzz_zzzzz_111_zzzzz_0110011_z: insn_simple  = 1; // PACKH
-			33'b 0000100_zzzzz_zzzzz_011_zzzzz_0110011_1: insn_bmatxor = 1; // BMATOR
-			33'b 0100100_zzzzz_zzzzz_011_zzzzz_0110011_1: insn_bmatxor = 1; // BMATXOR
-			33'b 0100100_zzzzz_zzzzz_111_zzzzz_0110011_z: insn_shifter = 1; // BFP
-
-			33'b 000010_00zzzz_zzzzz_001_zzzzz_0010011_0: insn_bextdep = 1; // SHFLI (RV32)
-			33'b 000010_00zzzz_zzzzz_101_zzzzz_0010011_0: insn_bextdep = 1; // UNSHFLI (RV32)
-
-			33'b 000010_0zzzzz_zzzzz_001_zzzzz_0010011_1: insn_bextdep = 1; // SHFLI (RV64)
-			33'b 000010_0zzzzz_zzzzz_101_zzzzz_0010011_1: insn_bextdep = 1; // UNSHFLI (RV64)
-
-			33'b zzzzzzz_zzzzz_zzzzz_100_zzzzz_0011011_1: insn_simple  = 1; // ADDIWU
-			33'b 000010_zzzzzz_zzzzz_001_zzzzz_0011011_1: insn_shifter = 1; // SLLIU.W
-
-			33'b 0000101_zzzzz_zzzzz_000_zzzzz_0111011_1: insn_simple  = 1; // ADDWU
-			33'b 0100101_zzzzz_zzzzz_000_zzzzz_0111011_1: insn_simple  = 1; // SUBWU
-			33'b 0000100_zzzzz_zzzzz_000_zzzzz_0111011_1: insn_simple  = 1; // ADDUW
-			33'b 0100100_zzzzz_zzzzz_000_zzzzz_0111011_1: insn_simple  = 1; // SUBUW
-
-			33'b 0010000_zzzzz_zzzzz_010_zzzzz_0111011_1: insn_simple = 1;  // SH1ADDU.W
-			33'b 0010000_zzzzz_zzzzz_100_zzzzz_0111011_1: insn_simple = 1;  // SH2ADDU.W
-			33'b 0010000_zzzzz_zzzzz_110_zzzzz_0111011_1: insn_simple = 1;  // SH3ADDU.W
-
-			33'b 0000000_zzzzz_zzzzz_001_zzzzz_0111011_1: insn_shifter = 1; // SLLW
-			33'b 0000000_zzzzz_zzzzz_101_zzzzz_0111011_1: insn_shifter = 1; // SRLW
-			33'b 0100000_zzzzz_zzzzz_101_zzzzz_0111011_1: insn_shifter = 1; // SRAW
-			33'b 0010000_zzzzz_zzzzz_001_zzzzz_0111011_1: insn_shifter = 1; // SLOW
-			33'b 0010000_zzzzz_zzzzz_101_zzzzz_0111011_1: insn_shifter = 1; // SROW
-			33'b 0110000_zzzzz_zzzzz_001_zzzzz_0111011_1: insn_shifter = 1; // ROLW
-			33'b 0110000_zzzzz_zzzzz_101_zzzzz_0111011_1: insn_shifter = 1; // RORW
-
-			33'b 0100100_zzzzz_zzzzz_001_zzzzz_0111011_1: insn_shifter = 1; // SBCLRW
-			33'b 0010100_zzzzz_zzzzz_001_zzzzz_0111011_1: insn_shifter = 1; // SBSETW
-			33'b 0110100_zzzzz_zzzzz_001_zzzzz_0111011_1: insn_shifter = 1; // SBINVW
-			33'b 0100100_zzzzz_zzzzz_101_zzzzz_0111011_1: insn_shifter = 1; // SBEXTW
-			33'b 0010100_zzzzz_zzzzz_101_zzzzz_0111011_1: insn_bextdep = 1; // GORCW
-			33'b 0110100_zzzzz_zzzzz_101_zzzzz_0111011_1: insn_bextdep = 1; // GREVW
-
-			33'b 00000_00zzzzz_zzzzz_001_zzzzz_0011011_1: insn_shifter = 1; // SLLIW
-			33'b 00000_00zzzzz_zzzzz_101_zzzzz_0011011_1: insn_shifter = 1; // SRLIW
-			33'b 01000_00zzzzz_zzzzz_101_zzzzz_0011011_1: insn_shifter = 1; // SRAIW
-			33'b 00100_00zzzzz_zzzzz_001_zzzzz_0011011_1: insn_shifter = 1; // SLOIW
-			33'b 00100_00zzzzz_zzzzz_101_zzzzz_0011011_1: insn_shifter = 1; // SROIW
-			33'b 01100_00zzzzz_zzzzz_101_zzzzz_0011011_1: insn_shifter = 1; // RORIW
-
-			33'b 01001_00zzzzz_zzzzz_001_zzzzz_0011011_1: insn_shifter = 1; // SBCLRIW
-			33'b 00101_00zzzzz_zzzzz_001_zzzzz_0011011_1: insn_shifter = 1; // SBSETIW
-			33'b 01101_00zzzzz_zzzzz_001_zzzzz_0011011_1: insn_shifter = 1; // SBINVIW
-			33'b 00101_00zzzzz_zzzzz_101_zzzzz_0011011_1: insn_bextdep = 1; // GORCIW
-			33'b 01101_00zzzzz_zzzzz_101_zzzzz_0011011_1: insn_bextdep = 1; // GREVIW
-
-			33'b zzzzz10_zzzzz_zzzzz_001_zzzzz_0111011_1: insn_shifter = 1; // FSLW
-			33'b zzzzz10_zzzzz_zzzzz_101_zzzzz_0111011_1: insn_shifter = 1; // FSRW
-			33'b zzzzz1_0zzzzz_zzzzz_101_zzzzz_0011011_1: insn_shifter = 1; // FSRIW
-
-			33'b 0110000_00000_zzzzz_001_zzzzz_0011011_1: insn_bitcnt  = 1; // CLZW
-			33'b 0110000_00001_zzzzz_001_zzzzz_0011011_1: insn_bitcnt  = 1; // CTZW
-			33'b 0110000_00010_zzzzz_001_zzzzz_0011011_1: insn_bitcnt  = 1; // PCNTW
-
-			33'b 0000101_zzzzz_zzzzz_001_zzzzz_0111011_1: insn_clmul   = 1; // CLMULW
-			33'b 0000101_zzzzz_zzzzz_010_zzzzz_0111011_1: insn_clmul   = 1; // CLMULRW
-			33'b 0000101_zzzzz_zzzzz_011_zzzzz_0111011_1: insn_clmul   = 1; // CLMULHW
-
-			33'b 0000100_zzzzz_zzzzz_001_zzzzz_0111011_1: insn_bextdep = 1; // SHFLW
-			33'b 0000100_zzzzz_zzzzz_101_zzzzz_0111011_1: insn_bextdep = 1; // UNSHFLW
-			33'b 0100100_zzzzz_zzzzz_110_zzzzz_0111011_1: insn_bextdep = 1; // BDEPW
-			33'b 0000100_zzzzz_zzzzz_110_zzzzz_0111011_1: insn_bextdep = 1; // BEXTW
-			33'b 0000100_zzzzz_zzzzz_100_zzzzz_0111011_1: insn_simple  = 1; // PACKW
-			33'b 0100100_zzzzz_zzzzz_100_zzzzz_0111011_1: insn_simple  = 1; // PACKUW
-			33'b 0100100_zzzzz_zzzzz_111_zzzzz_0111011_1: insn_shifter = 1; // BFPW
-		endcase
-	end
 endmodule
 
 module rvb_full_decoder #(

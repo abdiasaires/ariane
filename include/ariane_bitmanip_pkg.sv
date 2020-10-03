@@ -74,21 +74,23 @@ package ariane_bitmanip_pkg;
    localparam BM_FUNC_ADDUW         = 9'b0_100_000_1_1;
    localparam BM_FUNC_SUBUW         = 9'b1_100_000_1_1;
    
-   // **** Continuar a partir daqui
+   // Cycle redundancy check - 23 - 21,20
    
-   // Cycle redundancy check
-   
-   localparam BM_FUNC_CRCB           = 9'b100011010;
-   localparam BM_FUNC_CRCH           = 9'b100011010;
-   localparam BM_FUNC_CRCW           = 9'b100011010;
-   localparam BM_FUNC_CRCD           = 9'b100011010; 
-   localparam BM_FUNC_CRCCB          = 9'b100011010;
-   localparam BM_FUNC_CRCCH          = 9'b100011010;
-   localparam BM_FUNC_CRCCW          = 9'b100011010;
-   localparam BM_FUNC_CRCCD          = 9'b100011010; 	
+   localparam BM_FUNC_CRCB           = 9'b000000_0_00;
+   localparam BM_FUNC_CRCH           = 9'b000000_0_01;
+   localparam BM_FUNC_CRCW           = 9'b000000_0_10;
+   localparam BM_FUNC_CRCD           = 9'b000000_0_11; 
+   localparam BM_FUNC_CRCCB          = 9'b000000_1_00;
+   localparam BM_FUNC_CRCCH          = 9'b000000_1_01;
+   localparam BM_FUNC_CRCCW          = 9'b000000_1_10;
+   localparam BM_FUNC_CRCCD          = 9'b000000_1_11; 	
 
-    /* Bitmanip opcode */
-    localparam OpcodeBitmanip   = 7'b001_0011;
+    /* Bitmanip opcodes */
+    
+    localparam OpcodeBitmanip1  = 7'b01_100_11;
+    localparam OpcodeBitmanip2  = 7'b00_100_11;
+    localparam OpcodeBitmanip3  = 7'b00_110_11;
+    localparam OpcodeBitmanip4  = 7'b01_110_11;
 
 endpackage
 

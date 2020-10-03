@@ -477,35 +477,136 @@ module decoder (
                     // Integer Reg-Reg Operations
                     // ---------------------------
                     end else begin
-                        instruction_o.fu  = (instr.rtype.funct7 == 7'b000_0001) ? MULT : ALU;
+                        instruction_o.fu  = BITMANIP;
                         instruction_o.rs1 = instr.rtype.rs1;
                         instruction_o.rs2 = instr.rtype.rs2;
                         instruction_o.rd  = instr.rtype.rd;
 
+                        // ALU operations
                         unique case ({instr.rtype.funct7, instr.rtype.funct3})
-                            {7'b000_0000, 3'b000}: instruction_o.op = ariane_pkg::ADD;   // Add
-                            {7'b010_0000, 3'b000}: instruction_o.op = ariane_pkg::SUB;   // Sub
-                            {7'b000_0000, 3'b010}: instruction_o.op = ariane_pkg::SLTS;  // Set Lower Than
-                            {7'b000_0000, 3'b011}: instruction_o.op = ariane_pkg::SLTU;  // Set Lower Than Unsigned
-                            {7'b000_0000, 3'b100}: instruction_o.op = ariane_pkg::XORL;  // Xor
-                            {7'b000_0000, 3'b110}: instruction_o.op = ariane_pkg::ORL;   // Or
-                            {7'b000_0000, 3'b111}: instruction_o.op = ariane_pkg::ANDL;  // And
-                            {7'b000_0000, 3'b001}: instruction_o.op = ariane_pkg::SLL;   // Shift Left Logical
-                            {7'b000_0000, 3'b101}: instruction_o.op = ariane_pkg::SRL;   // Shift Right Logical
-                            {7'b010_0000, 3'b101}: instruction_o.op = ariane_pkg::SRA;   // Shift Right Arithmetic
+                            {7'b000_0000, 3'b000}: begin
+                                instruction_o.op = ariane_pkg::ADD;
+                                instruction_o.fu  = ALU;
+                                end   // Add
+                            {7'b010_0000, 3'b000}: begin
+                                instruction_o.op = ariane_pkg::SUB;   // Sub
+                                instruction_o.fu  = ALU;
+                                end
+                            {7'b000_0000, 3'b010}: begin
+                                instruction_o.op = ariane_pkg::SLTS;  // Set Lower Than
+                                instruction_o.fu  = ALU;
+                                end
+                            {7'b000_0000, 3'b011}: begin
+                                instruction_o.op = ariane_pkg::SLTU;  // Set Lower Than Unsigned
+                                instruction_o.fu  = ALU;
+                                end
+                            {7'b000_0000, 3'b100}: begin
+                                instruction_o.op = ariane_pkg::XORL;  // Xor
+                                instruction_o.fu  = ALU;
+                                end
+                            {7'b000_0000, 3'b110}: begin
+                                instruction_o.op = ariane_pkg::ORL;   // Or
+                                instruction_o.fu  = ALU;
+                                end
+                            {7'b000_0000, 3'b111}: begin
+                                instruction_o.op = ariane_pkg::ANDL;  // And
+                                instruction_o.fu  = ALU;
+                                end
                             // Multiplications
-                            {7'b000_0001, 3'b000}: instruction_o.op = ariane_pkg::MUL;
-                            {7'b000_0001, 3'b001}: instruction_o.op = ariane_pkg::MULH;
-                            {7'b000_0001, 3'b010}: instruction_o.op = ariane_pkg::MULHSU;
-                            {7'b000_0001, 3'b011}: instruction_o.op = ariane_pkg::MULHU;
-                            {7'b000_0001, 3'b100}: instruction_o.op = ariane_pkg::DIV;
-                            {7'b000_0001, 3'b101}: instruction_o.op = ariane_pkg::DIVU;
-                            {7'b000_0001, 3'b110}: instruction_o.op = ariane_pkg::REM;
-                            {7'b000_0001, 3'b111}: instruction_o.op = ariane_pkg::REMU;
-                            default: begin
-                                illegal_instr = 1'b1;
-                            end
+                            {7'b000_0001, 3'b000}: begin
+                                instruction_o.op = ariane_pkg::MUL;
+                                instruction_o.fu  = MULT;
+                                end
+                            {7'b000_0001, 3'b001}: begin
+                                instruction_o.op = ariane_pkg::MULH;
+                                instruction_o.fu  = MULT;
+                                end
+                            {7'b000_0001, 3'b010}: begin
+                                instruction_o.op = ariane_pkg::MULHSU;
+                                instruction_o.fu  = MULT;
+                                end
+                            {7'b000_0001, 3'b011}: begin
+                                instruction_o.op = ariane_pkg::MULHU;
+                                instruction_o.fu  = MULT;
+                                end
+                            {7'b000_0001, 3'b100}: begin
+                                instruction_o.op = ariane_pkg::DIV;
+                                instruction_o.fu  = MULT;
+                                end
+                            {7'b000_0001, 3'b101}: begin
+                                instruction_o.op = ariane_pkg::DIVU;
+                                instruction_o.fu  = MULT;
+                                end
+                            {7'b000_0001, 3'b110}: begin
+                                instruction_o.op = ariane_pkg::REM;
+                                instruction_o.fu  = MULT;
+                                end
+                            {7'b000_0001, 3'b111}: begin
+                                instruction_o.op = ariane_pkg::REMU;
+                                instruction_o.fu  = MULT;
+                                end
+                            // Bitmanip 1
+                            {7'b010_0000, 3'b111}: instruction_o.op = ariane_pkg::BM_ANDN;
+                            {7'b010_0000, 3'b110}: instruction_o.op = ariane_pkg::BM_ORN;
+                            {7'b010_0000, 3'b100}: instruction_o.op = ariane_pkg::BM_XNOR;
+                            {7'b000_0000, 3'b001}: instruction_o.op = ariane_pkg::BM_SLL;   
+                            {7'b000_0000, 3'b101}: instruction_o.op = ariane_pkg::BM_SRL;  
+                            {7'b010_0000, 3'b101}: instruction_o.op = ariane_pkg::BM_SRA;  
+                            {7'b001_0000, 3'b001}: instruction_o.op = ariane_pkg::BM_SLO;
+                            {7'b001_0000, 3'b101}: instruction_o.op = ariane_pkg::BM_SRO;
+                            {7'b011_0000, 3'b001}: instruction_o.op = ariane_pkg::BM_ROL;
+                            {7'b011_0000, 3'b101}: instruction_o.op = ariane_pkg::BM_ROR;
+                            // Bitmanip 2
+                            {7'b010_0100, 3'b001}: instruction_o.op = ariane_pkg::BM_SBCLR;
+                            {7'b001_0100, 3'b001}: instruction_o.op = ariane_pkg::BM_SBSET;
+                            {7'b011_0100, 3'b001}: instruction_o.op = ariane_pkg::BM_SBINV;
+                            {7'b010_0100, 3'b101}: instruction_o.op = ariane_pkg::BM_SBEXT;
+                            {7'b001_0100, 3'b101}: instruction_o.op = ariane_pkg::BM_GORC;
+                            {7'b011_0100, 3'b101}: instruction_o.op = ariane_pkg::BM_GREV;
+                            // Bitmanip 3
+                            {7'b000_0101, 3'b001}: instruction_o.op = ariane_pkg::BM_CLMUL;
+                            {7'b000_0101, 3'b010}: instruction_o.op = ariane_pkg::BM_CLMULR;
+                            {7'b000_0101, 3'b011}: instruction_o.op = ariane_pkg::BM_CLMULH;
+                            // Bitmanip 4
+                            {7'b000_0101, 3'b100}: instruction_o.op = ariane_pkg::BM_MIN;
+                            {7'b000_0101, 3'b101}: instruction_o.op = ariane_pkg::BM_MAX;
+                            {7'b000_0101, 3'b110}: instruction_o.op = ariane_pkg::BM_MINU;
+                            {7'b000_0101, 3'b111}: instruction_o.op = ariane_pkg::BM_MAXU;
+                            // Bitmanip 5
+                            {7'b000_0100, 3'b001}: instruction_o.op = ariane_pkg::BM_SHFL;
+                            {7'b000_0100, 3'b101}: instruction_o.op = ariane_pkg::BM_UNSHFL;
+                            {7'b010_0100, 3'b110}: instruction_o.op = ariane_pkg::BM_BDEP;
+                            {7'b000_0100, 3'b110}: instruction_o.op = ariane_pkg::BM_BEXT;
+                            {7'b000_0100, 3'b100}: instruction_o.op = ariane_pkg::BM_PACK;
+                            {7'b010_0100, 3'b100}: instruction_o.op = ariane_pkg::BM_PACKU;
+                            {7'b000_0100, 3'b011}: instruction_o.op = ariane_pkg::BM_BMATOR;
+                            {7'b010_0100, 3'b011}: instruction_o.op = ariane_pkg::BM_BMATXOR;
+                            {7'b000_0100, 3'b111}: instruction_o.op = ariane_pkg::BM_PACKH;
+                            {7'b010_0100, 3'b111}: instruction_o.op = ariane_pkg::BM_BFP;
+                            default:  illegal_instr = 1'b1;
                         endcase
+
+                        // Bitmanip operations with 3 operands
+                        unique case ({instr.r4type.funct2, instr.r4type.funct3})
+                            {2'b11, 3'b001}: begin
+                                instruction_o.op = ariane_pkg::BM_CMIX;
+                                imm_select       = RS3; // rs3 into result field
+                                end
+                            {2'b11, 3'b101}: begin
+                                instruction_o.op = ariane_pkg::BM_CMOV;
+                                imm_select       = RS3;
+                                end
+                            {2'b10, 3'b001}: begin
+                                instruction_o.op = ariane_pkg::BM_FSL;
+                                imm_select       = RS3;
+                                end
+                            {2'b10, 3'b101}: begin 
+                                instruction_o.op = ariane_pkg::BM_FSR;
+                                imm_select       = RS3;
+                                end
+                            default: illegal_instr = 1'b1;
+                        endcase
+
                     end
                 end
 
@@ -549,41 +650,78 @@ module decoder (
                         3'b100: instruction_o.op = ariane_pkg::XORL;  // Exclusive Or with Immediate
                         3'b110: instruction_o.op = ariane_pkg::ORL;   // Or with Immediate
                         3'b111: instruction_o.op = ariane_pkg::ANDL;  // And with Immediate
-
+                        
+                        // Bitmanip instructions                        
                         3'b001: begin
-                          if (instr.instr[31:26] == 6'b0)
-                            instruction_o.op = ariane_pkg::SLL;  // Shift Left Logical by Immediate
-                          
-                          // Beginning of bitmanip instructions
-                          else if(instr.instr[31:25] == 7'b011_0000)
-                              begin
-                                  instruction_o.fu  = BITMANIP;
-                                  imm_select        = NOIMM;
-
-                                  unique case ({instr.rtype.rs2, instr.rtype.funct3})  
-                                      {4'b0000, 3'b001}: instruction_o.op = ariane_pkg::BM_CLZ;      // clz
-                                      {4'b0001, 3'b001}: instruction_o.op = ariane_pkg::BM_CTZ;      // ctz
-                                      {4'b0010, 3'b001}: instruction_o.op = ariane_pkg::BM_PCNT;     // pcnt
-                                      {4'b0011, 3'b001}: instruction_o.op = ariane_pkg::BM_BMATFLIP; // bmatflip
-                                      {4'b0100, 3'b001}: instruction_o.op = ariane_pkg::BM_SEXTB;    // sext.b
-                                      {4'b0101, 3'b001}: instruction_o.op = ariane_pkg::BM_SEXTH;    // sext.h
-                                      default: illegal_instr = 1'b1;    
-                                  endcase
-                              end
-                          // End of bitmanip instructions
-
-                          else
-                              illegal_instr = 1'b1;    
-                          end
-
-                        3'b101: begin
-                            if (instr.instr[31:26] == 6'b0)
-                                instruction_o.op = ariane_pkg::SRL;  // Shift Right Logical by Immediate
-                            else if (instr.instr[31:26] == 6'b010_000)
-                                instruction_o.op = ariane_pkg::SRA;  // Shift Right Arithmetically by Immediate
-                            else
-                                illegal_instr = 1'b1;
+                          instruction_o.fu  = BITMANIP;
+                          case (instr.instr[31:26])
+                            6'b00_000_0:
+                                instruction_o.op = ariane_pkg::BM_SLL;  
+                            6'b00_100_0:
+                                instruction_o.op = ariane_pkg::BM_SLO; 
+                            6'b01_001_0:
+                                instruction_o.op = ariane_pkg::BM_SBCLR;
+                            6'b00_101_0:
+                                instruction_o.op = ariane_pkg::BM_SBSET;
+                            6'b01_101_0:
+                                instruction_o.op = ariane_pkg::BM_SBINV;
+                            6'b01_100_0:
+                                if(instr.instr[25] == 1'b0) begin
+                                    imm_select        = NOIMM;
+                                    case (instr.instr[24:20])
+                                        // Bit count
+                                        5'b00_000: instruction_o.op = ariane_pkg::BM_CLZ;
+                                        5'b00_001: instruction_o.op = ariane_pkg::BM_CTZ;
+                                        5'b00_010: instruction_o.op = ariane_pkg::BM_PCNT;
+                                        5'b00_011: instruction_o.op = ariane_pkg::BM_BMATFLIP;
+                                        5'b00_100: instruction_o.op = ariane_pkg::BM_SEXTB;
+                                        5'b00_101: instruction_o.op = ariane_pkg::BM_SEXTH;
+                                        // CRC32
+                                        5'b10_000: instruction_o.op = ariane_pkg::BM_CRCB;
+                                        5'b10_001: instruction_o.op = ariane_pkg::BM_CRCH;
+                                        5'b10_010: instruction_o.op = ariane_pkg::BM_CRCW;
+                                        5'b10_011: instruction_o.op = ariane_pkg::BM_CRCD;
+                                        // CRC32C
+                                        5'b11_000: instruction_o.op = ariane_pkg::BM_CRCCB;
+                                        5'b11_001: instruction_o.op = ariane_pkg::BM_CRCCH;
+                                        5'b11_010: instruction_o.op = ariane_pkg::BM_CRCCW;
+                                        5'b11_011: instruction_o.op = ariane_pkg::BM_CRCCD;
+                                        default: illegal_instr = 1'b1;
+                                    endcase
+                                end                            
+                            6'b00_001_0: instruction_o.op = ariane_pkg::BM_SHFL;
+                            
+                            default: illegal_instr = 1'b1;    
+                          endcase
                         end
+                            
+                        3'b101: begin
+                            instruction_o.fu  = BITMANIP;
+                            if(instr.instr[26] == 1'b1) begin
+                                instruction_o.op = ariane_pkg::BM_FSR;        
+                            end
+                            
+                            case (instr.instr[31:26])
+                                6'b00_000_0:
+                                    instruction_o.op = ariane_pkg::BM_SRL;
+                                6'b01_000_0:
+                                    instruction_o.op = ariane_pkg::BM_SRA;
+                                6'b00_100_0:
+                                    instruction_o.op = ariane_pkg::BM_SRO;
+                                6'b01_100_0:
+                                    instruction_o.op = ariane_pkg::BM_ROR;
+                                6'b01_001_0:
+                                    instruction_o.op = ariane_pkg::BM_SBEXT;
+                                6'b00_101_0:
+                                    instruction_o.op = ariane_pkg::BM_GORC;
+                                6'b01_101_0:
+                                    instruction_o.op = ariane_pkg::BM_GREV;
+                                6'b00_001_0:
+                                    instruction_o.op = ariane_pkg::BM_UNSHFL;
+                                default: illegal_instr = 1'b1;
+                            endcase  
+                        end
+                        
                     endcase
                 end
 
@@ -1018,22 +1156,7 @@ module decoder (
                 end
 
                 default: illegal_instr = 1'b1;
-/*
 
-                // --------------------------------
-                // Bit-manipulation Instructions
-                // --------------------------------
-                ariane_bitmanip_pkg::OpcodeBitmanip: begin
-                    instruction_o.fu  = BITMANIP;
-                    instruction_o.rs1[4:0] = instr.rtype.rs1;
-                    instruction_o.rd[4:0]  = instr.rtype.rd;
-
-                    unique case ({instr.rtype.funct7, instr.rtype.rs2, instr.rtype.funct3})
-                        {7'b011_0000, 4'b0001, 3'b000}: instruction_o.op = ariane_pkg::BM_CTZ; // ctz
-                        default: illegal_instr = 1'b1;
-                    endcase
-                end
-*/
             endcase
         end
     end
