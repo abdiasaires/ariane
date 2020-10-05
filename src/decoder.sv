@@ -583,6 +583,7 @@ module decoder (
                             {7'b010_0100, 3'b011}: instruction_o.op = ariane_pkg::BM_BMATXOR;
                             {7'b000_0100, 3'b111}: instruction_o.op = ariane_pkg::BM_PACKH;
                             {7'b010_0100, 3'b111}: instruction_o.op = ariane_pkg::BM_BFP;
+                            {7'b010_0111, 3'bzzz}: instruction_o.op = ariane_pkg::BM_BFP;  // Test. Delete this later.
                             default:  illegal_instr = 1'b1;
                         endcase
 
@@ -614,26 +615,109 @@ module decoder (
                 // 32bit Reg-Reg Operations
                 // --------------------------
                 riscv::OpcodeOp32: begin
-                    instruction_o.fu  = (instr.rtype.funct7 == 7'b000_0001) ? MULT : ALU;
+                    instruction_o.fu  = BITMANIP;       // default
                     instruction_o.rs1[4:0] = instr.rtype.rs1;
                     instruction_o.rs2[4:0] = instr.rtype.rs2;
                     instruction_o.rd[4:0]  = instr.rtype.rd;
 
+                    if(instr.rtype.funct3 == 3'b001) begin
+                        if(instr.rtype.funct7[1:0] == 2'b10) begin
+                            instruction_o.op        = ariane_pkg::BM_FSLW;         // rs3
+                            instruction_o.rs3[4:0]  = instr.r4type.rs3;
+                        else
+                            unique case (instr.rtype.funct7)
+                                7'b000_0000: begin
+                                    instruction_o.op = ariane_pkg::SLLW; 
+                                    instruction_o.fu  = ALU;
+                                end
+                                7'b001_0000: instruction_o.op = ariane_pkg::BM_SLOW;
+                                7'b011_0000: instruction_o.op = ariane_pkg::BM_ROLW;
+                                7'b010_0100: instruction_o.op = ariane_pkg::BM_SBCLRW;
+                                7'b001_0100: instruction_o.op = ariane_pkg::BM_SBSETW;
+                                7'b011_0100: instruction_o.op = ariane_pkg::BM_SBINVW;
+                                7'b000_0101: instruction_o.op = ariane_pkg::BM_CLMULW;
+                                7'b000_0100: instruction_o.op = ariane_pkg::BM_SHFLW;
+                                default: illegal_instr = 1'b1;
+                            endcase
+                        end    
+                       
+                    else if(instr.rtype.funct3 == 3'b101) begin
+                        if(instr.rtype.funct7[1:0] == 2'b10) begin
+                            instruction_o.op = ariane_pkg::BM_FSRW;    
+                            instruction_o.rs3[4:0]  = instr.r4type.rs3;     
+                        else
+                            unique case (instr.rtype.funct7)
+                                7'b000_0000: begin
+                                    instruction_o.op = ariane_pkg::SRLW;
+                                    instruction_o.fu = ALU;
+                                end
+                                7'b010_0000: begin
+                                    instruction_o.op = ariane_pkg::SRAW;
+                                    instruction_o.fu = ALU;
+                                end
+                                7'b000_0001: begin
+                                    instruction_o.op = ariane_pkg::DIVUW;
+                                    instruction_o.fu = MULT;
+                                end
+                                7'b001_0000: instruction_o.op = ariane_pkg::BM_SROW;
+                                7'b011_0000: instruction_o.op = ariane_pkg::BM_RORW;
+                                7'b010_0100: instruction_o.op = ariane_pkg::BM_SBEXTW;
+                                7'b001_0100: instruction_o.op = ariane_pkg::BM_GORCW;
+                                7'b011_0100: instruction_o.op = ariane_pkg::BM_GREVW;
+                                7'b000_0100: instruction_o.op = ariane_pkg::BM_UNSHFLW;
+                                default: illegal_instr = 1'b1;
+                            endcase
+                        end    
+                    else
                         unique case ({instr.rtype.funct7, instr.rtype.funct3})
-                            {7'b000_0000, 3'b000}: instruction_o.op = ariane_pkg::ADDW; // addw
-                            {7'b010_0000, 3'b000}: instruction_o.op = ariane_pkg::SUBW; // subw
-                            {7'b000_0000, 3'b001}: instruction_o.op = ariane_pkg::SLLW; // sllw
-                            {7'b000_0000, 3'b101}: instruction_o.op = ariane_pkg::SRLW; // srlw
-                            {7'b010_0000, 3'b101}: instruction_o.op = ariane_pkg::SRAW; // sraw
-                            // Multiplications
-                            {7'b000_0001, 3'b000}: instruction_o.op = ariane_pkg::MULW;
-                            {7'b000_0001, 3'b100}: instruction_o.op = ariane_pkg::DIVW;
-                            {7'b000_0001, 3'b101}: instruction_o.op = ariane_pkg::DIVUW;
-                            {7'b000_0001, 3'b110}: instruction_o.op = ariane_pkg::REMW;
-                            {7'b000_0001, 3'b111}: instruction_o.op = ariane_pkg::REMUW;
+                            // ALU
+                            {7'b000_0000, 3'b001}: begin
+                                instruction_o.op = ariane_pkg::SLLW;
+                                instruction_o.fu = ALU;
+                            end
+                            // Multiplication unit
+                            {7'b000_0001, 3'b000}: begin
+                                instruction_o.op = ariane_pkg::MULW;
+                                instruction_o.fu = MULT;
+                            end
+                            {7'b000_0001, 3'b100}: begin
+                                instruction_o.op = ariane_pkg::DIVW;
+                                instruction_o.fu = MULT;
+                            end
+                            {7'b000_0001, 3'b110}: begin
+                                instruction_o.op = ariane_pkg::REMW;
+                                instruction_o.fu = MULT;
+                            end
+                            {7'b000_0001, 3'b111}: begin
+                                instruction_o.op = ariane_pkg::REMUW;
+                                instruction_o.fu = MULT;
+                            end
+                            // Bitmanip
+                            {7'b000_0000, 3'b000}: instruction_o.op = ariane_pkg::BM_ADDW; 
+                            {7'b010_0000, 3'b000}: instruction_o.op = ariane_pkg::BM_SUBW; 
+                            {7'b000_0101, 3'b000}: instruction_o.op = ariane_pkg::BM_ADDWU;
+                            {7'b010_0101, 3'b000}: instruction_o.op = ariane_pkg::BM_SUBWU;
+                            {7'b000_0100, 3'b000}: instruction_o.op = ariane_pkg::BM_ADDUW;
+                            {7'b010_0100, 3'b000}: instruction_o.op = ariane_pkg::BM_SUBUW;
+                            {7'b001_0000, 3'b001}: instruction_o.op = ariane_pkg::BM_SLOW;
+                            {7'b011_0000, 3'b001}: instruction_o.op = ariane_pkg::BM_ROLW;
+                            {7'b010_0100, 3'b001}: instruction_o.op = ariane_pkg::BM_SBCLRW;
+                            {7'b001_0100, 3'b001}: instruction_o.op = ariane_pkg::BM_SBSETW;
+                            {7'b011_0100, 3'b001}: instruction_o.op = ariane_pkg::BM_SBINVW;
+                            {7'b000_0101, 3'b001}: instruction_o.op = ariane_pkg::BM_CLMULW;
+                            {7'b000_0101, 3'b010}: instruction_o.op = ariane_pkg::BM_CLMULRW;
+                            {7'b000_0101, 3'b011}: instruction_o.op = ariane_pkg::BM_CLMULHW;
+                            {7'b000_0100, 3'b001}: instruction_o.op = ariane_pkg::BM_SHFLW;
+                            {7'b010_0100, 3'b110}: instruction_o.op = ariane_pkg::BM_BDEPW;
+                            {7'b000_0100, 3'b110}: instruction_o.op = ariane_pkg::BM_BEXTW;
+                            {7'b000_0100, 3'b100}: instruction_o.op = ariane_pkg::BM_PACKW;
+                            {7'b010_0100, 3'b100}: instruction_o.op = ariane_pkg::BM_PACKUW;
+                            {7'b010_0100, 3'b111}: instruction_o.op = ariane_pkg::BM_BFPW;
                             default: illegal_instr = 1'b1;
                         endcase
+                    end
                 end
+                
                 // --------------------------------
                 // Reg-Immediate Operations
                 // --------------------------------
@@ -729,32 +813,65 @@ module decoder (
                 // 32 bit Reg-Immediate Operations
                 // --------------------------------
                 riscv::OpcodeOpImm32: begin
-                    instruction_o.fu  = ALU;
+                    instruction_o.fu  = BITMANIP;
                     imm_select = IIMM;
                     instruction_o.rs1[4:0] = instr.itype.rs1;
                     instruction_o.rd[4:0]  = instr.itype.rd;
-
-                    unique case (instr.itype.funct3)
-                        3'b000: instruction_o.op = ariane_pkg::ADDW;  // Add Immediate
-
-                        3'b001: begin
-                          instruction_o.op = ariane_pkg::SLLW;  // Shift Left Logical by Immediate
-                          if (instr.instr[31:25] != 7'b0)
-                              illegal_instr = 1'b1;
-                        end
-
+                    
+                    case(instr.itype.funct3)
+                        3'b000: instruction_o.op = ariane_pkg::BM_ADDW;
+                        3'b100: instruction_o.op = ariane_pkg::BM_ADDWU;
                         3'b101: begin
-                            if (instr.instr[31:25] == 7'b0)
-                                instruction_o.op = ariane_pkg::SRLW;  // Shift Right Logical by Immediate
-                            else if (instr.instr[31:25] == 7'b010_0000)
-                                instruction_o.op = ariane_pkg::SRAW;  // Shift Right Arithmetically by Immediate
-                            else
-                                illegal_instr = 1'b1;
+                            if (instr.itype.funct7[1:0] == 2'b10) begin
+                                instruction_o.op = ariane_pkg::BM_FSRW;  // TODO: Consertar atribuição de imediato e RS3 para FSRWI
+                            else 
+                                unique case (instr.itype.funct7)
+                                    7'b000_0000: begin
+                                        instruction_o.op  = ariane_pkg::SRLW;
+                                        instruction_o.fu  = ALU;
+                                    end
+                                    7'b010_0000:  begin
+                                        instruction_o.op = ariane_pkg::SRAW;;
+                                        instruction_o.fu  = ALU;
+                                    end
+                                    7'b001_0000:  instruction_o.op = ariane_pkg::BM_SROW;
+                                    7'b011_0000:  instruction_o.op = ariane_pkg::BM_RORW;
+                                    7'b001_0100:  instruction_o.op = ariane_pkg::BM_GORCW;
+                                    7'b011_0100:  instruction_o.op = ariane_pkg::BM_GREVW;
+                                    default: illegal_instr = 1'b1;
+                                endcase
+                            end    
                         end
-
-                        default: illegal_instr = 1'b1;
+                        3'b001: begin
+                            if (instr.itype.funct7[6:1] == 6'b000_010) begin
+                                instruction_o.op = ariane_pkg::BM_SLLUW;
+                            else
+                                unique case (instr.itype.funct7)
+                                    7'b000_0000:  begin
+                                        instruction_o.op = ariane_pkg::SLLW;
+                                        instruction_o.fu = ALU;
+                                    end
+                                    7'b001_0000:  instruction_o.op = ariane_pkg::BM_SLOW;   
+                                    7'b010_0100:  instruction_o.op = ariane_pkg::BM_SBCLRW;
+                                    7'b001_0100:  instruction_o.op = ariane_pkg::BM_SBSETW;
+                                    7'b011_0100:  instruction_o.op = ariane_pkg::BM_SBINVW;
+                                    7'b011_0000: begin
+                                        unique case (instr.rtype.rs2)
+                                            5'b00_000:  instruction_o.op = ariane_pkg::BM_CLZW;
+                                            5'b00_001:  instruction_o.op = ariane_pkg::BM_CTZW;
+                                            5'b00_010:  instruction_o.op = ariane_pkg::BM_PCNTW;
+                                            default: illegal_instr = 1'b1;
+                                        endcase
+                                    default: illegal_instr = 1'b1;
+                                endcase
+                            end
+                        end
+                        default: illegal_instr = 1'b1; 
+                            
                     endcase
-                end
+                end    
+
+                
                 // --------------------------------
                 // LSU
                 // --------------------------------
