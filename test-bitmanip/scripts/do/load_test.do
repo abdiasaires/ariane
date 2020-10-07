@@ -1,4 +1,4 @@
-do waves.do
+do waves_bitmanip.do
 
 run 20000 ns
 

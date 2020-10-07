@@ -55,7 +55,7 @@ module decoder (
     // Immediate select
     // --------------------
     enum logic[3:0] {
-        NOIMM, IIMM, SIMM, SBIMM, UIMM, JIMM, RS3
+        NOIMM, IIMM, SIMM, SBIMM, UIMM, JIMM, RS3, BMRS3
     } imm_select;
 
     logic [63:0] imm_i_type;
@@ -583,7 +583,6 @@ module decoder (
                             {7'b010_0100, 3'b011}: instruction_o.op = ariane_pkg::BM_BMATXOR;
                             {7'b000_0100, 3'b111}: instruction_o.op = ariane_pkg::BM_PACKH;
                             {7'b010_0100, 3'b111}: instruction_o.op = ariane_pkg::BM_BFP;
-                            {7'b010_0111, 3'bzzz}: instruction_o.op = ariane_pkg::BM_BFP;  // Test. Delete this later.
                             default:  illegal_instr = 1'b1;
                         endcase
 
@@ -591,23 +590,27 @@ module decoder (
                         unique case ({instr.r4type.funct2, instr.r4type.funct3})
                             {2'b11, 3'b001}: begin
                                 instruction_o.op = ariane_pkg::BM_CMIX;
-                                imm_select       = RS3; // rs3 into result field
+                                imm_select       = RS3; 
+                                illegal_instr = 1'b0;
                                 end
                             {2'b11, 3'b101}: begin
                                 instruction_o.op = ariane_pkg::BM_CMOV;
                                 imm_select       = RS3;
+                                illegal_instr = 1'b0;
                                 end
                             {2'b10, 3'b001}: begin
                                 instruction_o.op = ariane_pkg::BM_FSL;
                                 imm_select       = RS3;
+                                illegal_instr = 1'b0;
                                 end
                             {2'b10, 3'b101}: begin 
-                                instruction_o.op = ariane_pkg::BM_FSR;
-                                imm_select       = RS3;
+                                instruction_o.op    = ariane_pkg::BM_FSR;
+                                instruction_o.rs2   = instr.r4type.rs3;
+                                imm_select          = BMRS3;
+                                illegal_instr = 1'b0;
                                 end
                             default: illegal_instr = 1'b1;
                         endcase
-
                     end
                 end
 
@@ -615,16 +618,16 @@ module decoder (
                 // 32bit Reg-Reg Operations
                 // --------------------------
                 riscv::OpcodeOp32: begin
-                    instruction_o.fu  = BITMANIP;       // default
+                    instruction_o.fu       = BITMANIP;
                     instruction_o.rs1[4:0] = instr.rtype.rs1;
                     instruction_o.rs2[4:0] = instr.rtype.rs2;
                     instruction_o.rd[4:0]  = instr.rtype.rd;
 
                     if(instr.rtype.funct3 == 3'b001) begin
-                        if(instr.rtype.funct7[1:0] == 2'b10) begin
-                            instruction_o.op        = ariane_pkg::BM_FSLW;         // rs3
-                            instruction_o.rs3[4:0]  = instr.r4type.rs3;
-                        else
+                        if(instr.instr[26:25] == 2'b10) begin
+                            instruction_o.op        = ariane_pkg::BM_FSLW;
+                            imm_select              = RS3;
+                        end else begin
                             unique case (instr.rtype.funct7)
                                 7'b000_0000: begin
                                     instruction_o.op = ariane_pkg::SLLW; 
@@ -641,11 +644,12 @@ module decoder (
                             endcase
                         end    
                        
-                    else if(instr.rtype.funct3 == 3'b101) begin
-                        if(instr.rtype.funct7[1:0] == 2'b10) begin
-                            instruction_o.op = ariane_pkg::BM_FSRW;    
-                            instruction_o.rs3[4:0]  = instr.r4type.rs3;     
-                        else
+                    end else if(instr.rtype.funct3 == 3'b101) begin
+                        if(instr.instr[26:25] == 2'b10) begin
+                            instruction_o.op        = ariane_pkg::BM_FSRW;    
+                            instruction_o.rs2[4:0]  = instr.r4type.rs3;
+                            imm_select              = BMRS3;
+                        end else begin
                             unique case (instr.rtype.funct7)
                                 7'b000_0000: begin
                                     instruction_o.op = ariane_pkg::SRLW;
@@ -667,8 +671,9 @@ module decoder (
                                 7'b000_0100: instruction_o.op = ariane_pkg::BM_UNSHFLW;
                                 default: illegal_instr = 1'b1;
                             endcase
-                        end    
-                    else
+                        end   
+                         
+                    end else begin
                         unique case ({instr.rtype.funct7, instr.rtype.funct3})
                             // ALU
                             {7'b000_0000, 3'b001}: begin
@@ -772,6 +777,8 @@ module decoder (
                                         5'b11_011: instruction_o.op = ariane_pkg::BM_CRCCD;
                                         default: illegal_instr = 1'b1;
                                     endcase
+                                end else begin
+                                    illegal_instr = 1'b1;    
                                 end                            
                             6'b00_001_0: instruction_o.op = ariane_pkg::BM_SHFL;
                             
@@ -782,28 +789,29 @@ module decoder (
                         3'b101: begin
                             instruction_o.fu  = BITMANIP;
                             if(instr.instr[26] == 1'b1) begin
-                                instruction_o.op = ariane_pkg::BM_FSR;        
-                            end
-                            
-                            case (instr.instr[31:26])
-                                6'b00_000_0:
-                                    instruction_o.op = ariane_pkg::BM_SRL;
-                                6'b01_000_0:
-                                    instruction_o.op = ariane_pkg::BM_SRA;
-                                6'b00_100_0:
-                                    instruction_o.op = ariane_pkg::BM_SRO;
-                                6'b01_100_0:
-                                    instruction_o.op = ariane_pkg::BM_ROR;
-                                6'b01_001_0:
-                                    instruction_o.op = ariane_pkg::BM_SBEXT;
-                                6'b00_101_0:
-                                    instruction_o.op = ariane_pkg::BM_GORC;
-                                6'b01_101_0:
-                                    instruction_o.op = ariane_pkg::BM_GREV;
-                                6'b00_001_0:
-                                    instruction_o.op = ariane_pkg::BM_UNSHFL;
-                                default: illegal_instr = 1'b1;
-                            endcase  
+                                instruction_o.op    = ariane_pkg::BM_FSR;
+                                instruction_o.rs2   = instr.r4type.rs3;
+                            end else begin                       
+                                case (instr.instr[31:26])
+                                    6'b00_000_0:
+                                        instruction_o.op = ariane_pkg::BM_SRL;
+                                    6'b01_000_0:
+                                        instruction_o.op = ariane_pkg::BM_SRA;
+                                    6'b00_100_0:
+                                        instruction_o.op = ariane_pkg::BM_SRO;
+                                    6'b01_100_0:
+                                        instruction_o.op = ariane_pkg::BM_ROR;
+                                    6'b01_001_0:
+                                        instruction_o.op = ariane_pkg::BM_SBEXT;
+                                    6'b00_101_0:
+                                        instruction_o.op = ariane_pkg::BM_GORC;
+                                    6'b01_101_0:
+                                        instruction_o.op = ariane_pkg::BM_GREV;
+                                    6'b00_001_0:
+                                        instruction_o.op = ariane_pkg::BM_UNSHFL;
+                                    default: illegal_instr = 1'b1;
+                                endcase
+                            end  
                         end
                         
                     endcase
@@ -820,12 +828,13 @@ module decoder (
                     
                     case(instr.itype.funct3)
                         3'b000: instruction_o.op = ariane_pkg::BM_ADDW;
-                        3'b100: instruction_o.op = ariane_pkg::BM_ADDWU;
+                        3'b100: instruction_o.op = ariane_pkg::BM_ADDIWU;
                         3'b101: begin
-                            if (instr.itype.funct7[1:0] == 2'b10) begin
-                                instruction_o.op = ariane_pkg::BM_FSRW;  // TODO: Consertar atribuição de imediato e RS3 para FSRWI
-                            else 
-                                unique case (instr.itype.funct7)
+                            if (instr.instr[26:25] == 2'b10) begin
+                                instruction_o.op        = ariane_pkg::BM_FSRW;  
+                                instruction_o.rs2       = instr.r4type.rs3;
+                            end else begin 
+                                unique case (instr.rtype.funct7)
                                     7'b000_0000: begin
                                         instruction_o.op  = ariane_pkg::SRLW;
                                         instruction_o.fu  = ALU;
@@ -843,10 +852,10 @@ module decoder (
                             end    
                         end
                         3'b001: begin
-                            if (instr.itype.funct7[6:1] == 6'b000_010) begin
+                            if (instr.rtype.funct7[31:26] == 6'b000_010) begin
                                 instruction_o.op = ariane_pkg::BM_SLLUW;
-                            else
-                                unique case (instr.itype.funct7)
+                            end else begin
+                                unique case (instr.rtype.funct7)
                                     7'b000_0000:  begin
                                         instruction_o.op = ariane_pkg::SLLW;
                                         instruction_o.fu = ALU;
@@ -856,12 +865,14 @@ module decoder (
                                     7'b001_0100:  instruction_o.op = ariane_pkg::BM_SBSETW;
                                     7'b011_0100:  instruction_o.op = ariane_pkg::BM_SBINVW;
                                     7'b011_0000: begin
+                                        imm_select  = NOIMM;
                                         unique case (instr.rtype.rs2)
                                             5'b00_000:  instruction_o.op = ariane_pkg::BM_CLZW;
                                             5'b00_001:  instruction_o.op = ariane_pkg::BM_CTZW;
                                             5'b00_010:  instruction_o.op = ariane_pkg::BM_PCNTW;
                                             default: illegal_instr = 1'b1;
                                         endcase
+                                    end
                                     default: illegal_instr = 1'b1;
                                 endcase
                             end
@@ -1315,6 +1326,13 @@ module decoder (
             RS3: begin
                 // result holds address of fp operand rs3
                 instruction_o.result = {59'b0, instr.r4type.rs3};
+                instruction_o.use_imm = 1'b0;
+            end
+            BMRS3: begin
+                // Result holds the address of the 'rs2' operand in case of BM_FSR.
+                // This will eventually become the third operand ('immediate') 
+                // sent to the bitmanip unit
+                instruction_o.result = {59'b0, instr.r4type.rs2};
                 instruction_o.use_imm = 1'b0;
             end
             default: begin

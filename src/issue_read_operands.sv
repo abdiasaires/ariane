@@ -231,7 +231,7 @@ module issue_read_operands #(
         end
         // or is it an immediate (including PC), this is not the case for a store and control flow instructions
         // also make sure operand B is not already used as an FP operand
-        if (issue_instr_i.use_imm && (issue_instr_i.fu != STORE) && (issue_instr_i.fu != CTRL_FLOW) && !is_rs2_fpr(issue_instr_i.op)) begin
+        if (issue_instr_i.use_imm && (issue_instr_i.fu != STORE) && (issue_instr_i.fu != CTRL_FLOW) && !is_rs2_fpr(issue_instr_i.op) && (issue_instr_i.op != BM_FSR) && (issue_instr_i.op != BM_FSRW)) begin
             operand_b_n = issue_instr_i.result;
         end
     end

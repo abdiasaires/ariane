@@ -476,22 +476,23 @@ package ariane_pkg;
                                BM_CLMUL, BM_CLMULR, BM_CLMULH,
                                BM_CLMULW, BM_CLMULRW, BM_CLMULHW,
 
-                               // Shift
-                               BM_SLL, BM_SRL, BM_SRA, BM_SLO, BM_SRO, BM_ROL, BM_ROR, BM_FSL, BM_FSR, BM_SLLIU,
-                               BM_SBSET, BM_SBCLR, BM_SBINV, BM_SBEXT, BM_BFP,
-                               BM_SLOW, BM_SROW, BM_ROLW, BM_RORW, BM_SBCLRW, BM_SBSETW, BM_SBINVW, BM_SBEXTW,
-                               BM_GORCW, BM_GREVW, BM_FSLW, BM_FSRW, BM_CLZW, BM_CTZW, BM_PCNTW,
+                               // Shift -- TODO: Delete SLLU?
+                               BM_SLL, BM_SLLU, BM_SLLUW, BM_SRL, BM_SRA, BM_SLO, BM_SLOW,
+                               BM_SRO, BM_SROW, BM_ROL, BM_ROLW, BM_ROR, BM_RORW, BM_FSL, BM_FSLW,
+                               BM_FSR, BM_FSRW, BM_SBSET, BM_SBSETW, BM_SBCLR, BM_SBCLRW,
+                               BM_SBINV, BM_SBINVW, BM_SBEXT, BM_SBEXTW, BM_BFP, BM_BFPW,
+                               BM_GORCW, BM_GREVW, BM_CLZW, BM_CTZW, BM_PCNTW,
                                
                                // Bit matrix
                                BM_BMATXOR, BM_BMATOR,
                                
                                // Simple
                                BM_MIN, BM_MAX, BM_MINU, BM_MAXU, BM_ANDN, BM_ORN, BM_XNOR, 
-                               BM_PACK, BM_PACKU, BM_PACKH, BM_CMIX, BM_CMOV, BM_ADDW, BM_ADDWU,
-                               BM_SUBWU, BM_ADDUW, SUBUW, BM_SUBUW,
-                               BM_PACKW, BM_PACKUW, BM_BFPW,
+                               BM_PACK, BM_PACKU, BM_PACKH, BM_CMIX, BM_CMOV, BM_ADDW, BM_ADDIWU, BM_ADDWU,
+                               BM_SUBW, BM_SUBWU, BM_ADDUW, BM_SUBUW,
+                               BM_PACKW, BM_PACKUW, 
                                BM_BEXT, BM_BDEP, BM_GREV, BM_GORC, BM_SHFL, BM_UNSHFL,
-                               BM_BDEPW, BM_BEXTW, 
+                               BM_SHFLW, BM_UNSHFLW, BM_BDEPW, BM_BEXTW, 
                                
                                // Bit count
                                BM_CLZ, BM_CTZ, BM_PCNT, BM_BMATFLIP, BM_SEXTB, BM_SEXTH,

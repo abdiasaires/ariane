@@ -161,6 +161,12 @@ src :=  $(filter-out src/ariane_regfile.sv, $(wildcard src/*.sv))              \
         tb/ariane_testharness.sv                                               \
         tb/ariane_peripherals.sv                                               \
         src/bitmanip/verilog/rvb_bitcnt/rvb_bitcnt.v                           \
+        src/bitmanip/verilog/rvb_bextdep/rvb_bextdep.v                         \
+        src/bitmanip/verilog/rvb_clmul/rvb_clmul.v                             \
+        src/bitmanip/verilog/rvb_crc/rvb_crc.v                                 \
+        src/bitmanip/verilog/rvb_shifter/rvb_shifter.v                         \
+        src/bitmanip/verilog/rvb_simple/rvb_simple.v                           \
+        src/bitmanip/verilog/rvb_bmatxor/rvb_bmatxor.v                         \
         tb/common/uart.sv                                                      
        
 
