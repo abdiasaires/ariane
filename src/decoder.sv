@@ -680,6 +680,14 @@ module decoder (
                                 instruction_o.op = ariane_pkg::SLLW;
                                 instruction_o.fu = ALU;
                             end
+                            {7'b000_0000, 3'b000}: begin
+                                instruction_o.op = ariane_pkg::ADDW;
+                                instruction_o.fu = ALU;
+                            end
+                            {7'b010_0000, 3'b000}: begin
+                                instruction_o.op = ariane_pkg::SUBW;
+                                instruction_o.fu = ALU;
+                            end
                             // Multiplication unit
                             {7'b000_0001, 3'b000}: begin
                                 instruction_o.op = ariane_pkg::MULW;
@@ -698,8 +706,6 @@ module decoder (
                                 instruction_o.fu = MULT;
                             end
                             // Bitmanip
-                            {7'b000_0000, 3'b000}: instruction_o.op = ariane_pkg::BM_ADDW; 
-                            {7'b010_0000, 3'b000}: instruction_o.op = ariane_pkg::BM_SUBW; 
                             {7'b000_0101, 3'b000}: instruction_o.op = ariane_pkg::BM_ADDWU;
                             {7'b010_0101, 3'b000}: instruction_o.op = ariane_pkg::BM_SUBWU;
                             {7'b000_0100, 3'b000}: instruction_o.op = ariane_pkg::BM_ADDUW;
@@ -827,7 +833,10 @@ module decoder (
                     instruction_o.rd[4:0]  = instr.itype.rd;
                     
                     case(instr.itype.funct3)
-                        3'b000: instruction_o.op = ariane_pkg::BM_ADDW;
+                        3'b000: begin
+                            instruction_o.op = ariane_pkg::ADDW;
+                            instruction_o.fu = ALU;
+                        end
                         3'b100: instruction_o.op = ariane_pkg::BM_ADDIWU;
                         3'b101: begin
                             if (instr.instr[26:25] == 2'b10) begin
