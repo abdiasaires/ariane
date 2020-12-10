@@ -5,4 +5,4 @@ cd ../../..
 make -f Makefile sim cl=1 do=test-bitmanip/scripts/do/load_test.do
 
 # View waveforms
-# vsim -view vsim.wlf
+vsim -view vsim.wlf

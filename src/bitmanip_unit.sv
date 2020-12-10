@@ -553,7 +553,11 @@ module bm_op_decoder #(
 			BM_GREV: begin
                 op_select	    = BM_FUNC_GREV;
 			    insn_bextdep    = 1'b1; 
-			    end			
+			    end
+			BM_GREVW: begin
+                op_select	    = BM_FUNC_GREVW;
+			    insn_bextdep    = 1'b1; 
+			    end			    			
 			BM_GORC: begin
                 op_select	    = BM_FUNC_GORC;
 			    insn_bextdep    = 1'b1; 

@@ -1,3 +1,5 @@
+# Testing decoding and issueing of bextdep instructions
+
 .include "macros/macros.s"
 
 .eqv ARG1, 0xbbbbbbbbbbbbbbbb
@@ -9,6 +11,7 @@
 
 main:
 
+    ## Maybe causes problems: test later 
     li x1, ARG1
     li x2, ARG2
 

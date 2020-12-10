@@ -163,5 +163,3 @@ examine -hex \
 {sim:/ariane_bitmanip_tb/dut/i_ariane/issue_stage_i/i_issue_read_operands/i_ariane_regfile/mem[31]} 
 
 
-transcript file ""
-
