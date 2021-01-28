@@ -476,8 +476,8 @@ package ariane_pkg;
                                BM_CLMUL, BM_CLMULR, BM_CLMULH,
                                BM_CLMULW, BM_CLMULRW, BM_CLMULHW,
 
-                               // Shift -- TODO: Delete SLLU?
-                               BM_SLL, BM_SLLU, BM_SLLUW, BM_SRL, BM_SRA, BM_SLO, BM_SLOW,
+                               // Shift 
+                               BM_SLL, BM_SLLW, BM_SLLUW, BM_SRL, BM_SRLW, BM_SRA, BM_SRAW, BM_SLO, BM_SLOW,
                                BM_SRO, BM_SROW, BM_ROL, BM_ROLW, BM_ROR, BM_RORW, BM_FSL, BM_FSLW,
                                BM_FSR, BM_FSRW, BM_SBSET, BM_SBSETW, BM_SBCLR, BM_SBCLRW,
                                BM_SBINV, BM_SBINVW, BM_SBEXT, BM_SBEXTW, BM_BFP, BM_BFPW,

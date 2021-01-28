@@ -2,6 +2,8 @@
  * Ariane Bitmanip's definitions 
  */
 
+import ariane_pkg::*;
+
 package ariane_bitmanip_pkg;
 
     // Number of bits of the operation selector
@@ -46,10 +48,12 @@ package ariane_bitmanip_pkg;
 	// Shifter - 30,29 - 27,26 - 14,13 - 3
 	
    localparam BM_FUNC_SLL            = 9'b00_00_00_00_0;
-   localparam BM_FUNC_SLLU           = 9'b00_00_10_00_1;    // TODO: Doesn't exist. Delete it?
+   localparam BM_FUNC_SLLW           = 9'b00_00_00_00_1;
    localparam BM_FUNC_SLLUW          = 9'b00_00_10_00_1;
    localparam BM_FUNC_SRL            = 9'b00_00_00_10_0;
+   localparam BM_FUNC_SRLW           = 9'b00_00_00_10_1;
    localparam BM_FUNC_SRA            = 9'b00_10_00_10_0;
+   localparam BM_FUNC_SRAW           = 9'b00_10_00_10_1;
    localparam BM_FUNC_SLO            = 9'b00_01_00_00_0;
    localparam BM_FUNC_SLOW           = 9'b00_01_00_00_1;
    localparam BM_FUNC_SRO            = 9'b00_01_00_10_0;
@@ -120,20 +124,20 @@ package ariane_bitmanip_pkg;
     localparam OpcodeBitmanip2  = 7'b00_100_11;
     localparam OpcodeBitmanip3  = 7'b00_110_11;
     localparam OpcodeBitmanip4  = 7'b01_110_11;
+    
+    // Ternary bitmanip operations encode the rs3 address in the imm field
+    function automatic logic is_ternary_bm (input ariane_pkg::fu_op op);
+        unique case (op) inside
+            ariane_pkg::BM_CMIX,
+            ariane_pkg::BM_CMOV,
+            ariane_pkg::BM_FSL,
+            ariane_pkg::BM_FSR,
+            ariane_pkg::BM_FSRW : return 1'b1; 
+            default : return 1'b0; // all other operations
+        endcase
+        return 1'b0;
+    endfunction;
 
 endpackage
 
 
-/*
-Simple: 3,5,12,13,14,25,26,27,30
-Shifter: 3,13,14,26,27,29,30
-CRC:    20,21,23
-CLmul: 3,12,13
-Bmatxor: 30
-Bitcnt: 3,20,21,22
-Bextdep: 3,13,14,29,30
-
-
-
-
-*/

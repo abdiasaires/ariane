@@ -11,7 +11,6 @@
 
 main:
 
-    ## Maybe causes problems: test later 
     li x1, ARG1
     li x2, ARG2
 

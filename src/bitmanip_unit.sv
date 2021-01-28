@@ -187,17 +187,20 @@ module bitmanip_unit #(
 			in_simple       <= insn_simple;
 			in_op_select    <= op_select;
 			in_rs1          <= din_rs1;
+		    in_rs2          <= din_rs3;
+		    in_rs3          <= din_rs2;
 			
 			// Inversion of the 2nd and the 3rd operands in the case of an FSR(W) operation.
 			// This is necessary because Ariane's issue stage allocates the immediate value to 
 			// the 3rd operand, not the 2nd one.
-            if(fu_data_i.operator == BM_FSR || fu_data_i.operator == BM_FSRW) begin
+            /*if(fu_data_i.operator == BM_FSR || fu_data_i.operator == BM_FSRW) begin
 			    in_rs2          <= din_rs3;
 			    in_rs3          <= din_rs2;
             end else begin
 			    in_rs2          <= din_rs2;
 			    in_rs3          <= din_rs3;            
             end
+            */
 		end
 
 		if (reset) begin
@@ -616,8 +619,8 @@ module bm_op_decoder #(
                 op_select	    = BM_FUNC_SLL;
 			    insn_shifter    = 1'b1; 
 			    end
-           BM_SLLU: begin
-                op_select	    = BM_FUNC_SLLU;
+           BM_SLLW: begin
+                op_select	    = BM_FUNC_SLLW;
 			    insn_shifter    = 1'b1; 
 			    end
            BM_SLLUW: begin
@@ -628,8 +631,16 @@ module bm_op_decoder #(
                 op_select	    = BM_FUNC_SRL;
 			    insn_shifter    = 1'b1; 
 			    end
+           BM_SRLW: begin
+                op_select	    = BM_FUNC_SRLW;
+			    insn_shifter    = 1'b1; 
+			    end
            BM_SRA: begin
                 op_select	    = BM_FUNC_SRA;
+			    insn_shifter    = 1'b1; 
+			    end
+           BM_SRAW: begin
+                op_select	    = BM_FUNC_SRAW;
 			    insn_shifter    = 1'b1; 
 			    end
            BM_SLO: begin

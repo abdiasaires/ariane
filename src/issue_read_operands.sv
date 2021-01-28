@@ -14,6 +14,7 @@
 //              This also includes all the forwarding logic
 
 import ariane_pkg::*;
+import ariane_bitmanip_pkg::*;
 
 module issue_read_operands #(
     parameter int unsigned NR_COMMIT_PORTS = 2
@@ -202,7 +203,16 @@ module issue_read_operands #(
         operand_b_n = operand_b_regfile;
         // immediates are the third operands in the store case
         // for FP operations, the imm field can also be the third operand from the regfile
-        imm_n      = is_imm_fpr(issue_instr_i.op) ? operand_c_regfile : issue_instr_i.result;
+        imm_n      = is_imm_fpr(issue_instr_i.op) || is_ternary_bm(issue_instr_i.op) ? operand_c_regfile : issue_instr_i.result;
+        if(is_imm_fpr(issue_instr_i.op) || (is_ternary_bm(issue_instr_i.op) && issue_instr_i.use_imm == 1'b0 )) begin
+            imm_n = operand_c_regfile;
+        // Cases of BM_FSRI or BM_FSRIW
+        end else if (is_ternary_bm(issue_instr_i.op) && issue_instr_i.use_imm == 1'b1 ) begin 
+            imm_n = operand_b_regfile;
+        end else begin
+            imm_n = issue_instr_i.result;
+        end
+        
         trans_id_n = issue_instr_i.trans_id;
         fu_n       = issue_instr_i.fu;
         operator_n = issue_instr_i.op;
@@ -231,7 +241,7 @@ module issue_read_operands #(
         end
         // or is it an immediate (including PC), this is not the case for a store and control flow instructions
         // also make sure operand B is not already used as an FP operand
-        if (issue_instr_i.use_imm && (issue_instr_i.fu != STORE) && (issue_instr_i.fu != CTRL_FLOW) && !is_rs2_fpr(issue_instr_i.op) && (issue_instr_i.op != BM_FSR) && (issue_instr_i.op != BM_FSRW)) begin
+        if (issue_instr_i.use_imm && (issue_instr_i.fu != STORE) && (issue_instr_i.fu != CTRL_FLOW) && !is_rs2_fpr(issue_instr_i.op)) begin
             operand_b_n = issue_instr_i.result;
         end
     end
@@ -355,21 +365,21 @@ module issue_read_operands #(
     // ----------------------
     // Integer Register File
     // ----------------------
-    logic [1:0][63:0] rdata;
-    logic [1:0][4:0]  raddr_pack;
+    logic [2:0][63:0] rdata;
+    logic [2:0][4:0]  raddr_pack;
 
     // pack signals
     logic [NR_COMMIT_PORTS-1:0][4:0]  waddr_pack;
     logic [NR_COMMIT_PORTS-1:0][63:0] wdata_pack;
     logic [NR_COMMIT_PORTS-1:0]       we_pack;
-    assign raddr_pack = {issue_instr_i.rs2[4:0], issue_instr_i.rs1[4:0]};
+    assign raddr_pack = {issue_instr_i.result[4:0], issue_instr_i.rs2[4:0], issue_instr_i.rs1[4:0]};
     assign waddr_pack = {waddr_i[1],  waddr_i[0]};
     assign wdata_pack = {wdata_i[1],  wdata_i[0]};
     assign we_pack    = {we_gpr_i[1], we_gpr_i[0]};
 
     ariane_regfile #(
         .DATA_WIDTH     ( 64              ),
-        .NR_READ_PORTS  ( 2               ),
+        .NR_READ_PORTS  ( 3               ),
         .NR_WRITE_PORTS ( NR_COMMIT_PORTS ),
         .ZERO_REG_ZERO  ( 1               )
     ) i_ariane_regfile (
@@ -417,7 +427,7 @@ module issue_read_operands #(
 
     assign operand_a_regfile = is_rs1_fpr(issue_instr_i.op) ? fprdata[0] : rdata[0];
     assign operand_b_regfile = is_rs2_fpr(issue_instr_i.op) ? fprdata[1] : rdata[1];
-    assign operand_c_regfile = fprdata[2];
+    assign operand_c_regfile = is_imm_fpr(issue_instr_i.op) ? fprdata[2] : rdata[2];
 
     // ----------------------
     // Registers (ID <-> EX)
