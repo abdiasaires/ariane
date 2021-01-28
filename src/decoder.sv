@@ -609,7 +609,7 @@ module decoder (
                                     instruction_o.op    = ariane_pkg::BM_FSR;
                                     imm_select          = RS3;
                                     end
-                                default: illegal_instr = 1'b1;
+                                default: illegal_instr = 1'b1; 
                             endcase
                         end 
                     end
